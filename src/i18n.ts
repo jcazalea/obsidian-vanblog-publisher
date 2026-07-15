@@ -189,6 +189,7 @@ const dict: Dict = {
 	'plugin.publishCmd':              { zh: '将当前文件发布到 VanBlog', en: 'Publish current file to VanBlog' },
 	'plugin.revokeCmd':               { zh: '从 VanBlog 撤回当前文件', en: 'Revoke current file from VanBlog' },
 	'plugin.publishMenu':             { zh: '发布到 VanBlog', en: 'Publish to VanBlog' },
+	'plugin.updateMenu':              { zh: '更新到 VanBlog', en: 'Update on VanBlog' },
 	'plugin.revokeMenu':              { zh: '从 VanBlog 撤回', en: 'Revoke from VanBlog' },
 	'plugin.publishFailed':           { zh: '发布失败', en: 'Publish failed' },
 	'plugin.revokeFailed':            { zh: '撤回失败', en: 'Revoke failed' },

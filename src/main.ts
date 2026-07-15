@@ -4,7 +4,7 @@
  * Publish markdown documents from Obsidian to a VanBlog instance.
  *   - Uploads embedded images / attachments, replacing local paths.
  *   - Respects front‑matter fields (title, tags, category, slug, …).
- *   - Stores a mapping for later revoke / update.
+ *   - Writes VanBlog properties (vanblog-id, vanblog-url, …) to front‑matter.
  *   - Fetches available tags & categories on startup for dropdown UIs.
  */
 
@@ -22,7 +22,7 @@ import {
 	type VanBlogSettings,
 } from './settings';
 import { VanBlogApiClient, VanBlogApiError } from './api/client';
-import type { ArticlePayload, ArticleRecord, ArticleResponse } from './api/types';
+import type { ArticlePayload, ArticleResponse } from './api/types';
 import {
 	findEmbeddedFiles,
 	applyReplacements,
@@ -33,15 +33,11 @@ import {
 } from './utils/markdown';
 import { PublishModal } from './modals/publish-modal';
 import { RevokeModal } from './modals/revoke-modal';
-import { emptyData, getRecord, setRecord, removeRecord } from './data';
 import { t, useLocale, resolveLocale } from './i18n';
 
 export default class VanBlogPlugin extends Plugin {
 	settings!: VanBlogSettings;
 	api!: VanBlogApiClient;
-
-	/** Article mapping data */
-	private pluginData = emptyData();
 
 	/** Tags & categories fetched from VanBlog — used in dropdown UIs */
 	availableTags: string[] = [];
@@ -55,7 +51,6 @@ export default class VanBlogPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
-		await this.loadPluginData();
 
 		// Initialise i18n locale (resolve 'obsidian' to actual language)
 		useLocale(resolveLocale(this.settings.locale, this));
@@ -89,8 +84,6 @@ export default class VanBlogPlugin extends Plugin {
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file || file.extension !== 'md') return false;
-				const record = getRecord(this.pluginData, file.path);
-				if (!record || !record.isPublished) return false;
 				if (!checking) {
 					this.revokeFile(file);
 				}
@@ -103,18 +96,28 @@ export default class VanBlogPlugin extends Plugin {
 			this.app.workspace.on('file-menu', (menu: Menu, file: TAbstractFile) => {
 				if (!(file instanceof TFile) || file.extension !== 'md') return;
 
-				menu.addItem((item) => {
-					item.setTitle(t('plugin.publishMenu'))
-						.setIcon('upload')
-						.onClick(() => this.publishFile(file));
-				});
+				// Use metadataCache (synchronous) to check vanblog-id in frontmatter
+				const cache = this.app.metadataCache.getFileCache(file);
+				const vanblogId = cache?.frontmatter?.['vanblog-id'] ?? null;
 
-				const record = getRecord(this.pluginData, file.path);
-				if (record?.isPublished) {
+				if (vanblogId != null) {
+					// Already published — show Update and Revoke
+					menu.addItem((item) => {
+						item.setTitle(t('plugin.updateMenu'))
+							.setIcon('sync')
+							.onClick(() => this.publishFile(file));
+					});
 					menu.addItem((item) => {
 						item.setTitle(t('plugin.revokeMenu'))
 							.setIcon('trash')
 							.onClick(() => this.revokeFile(file));
+					});
+				} else {
+					// Not published — show Publish
+					menu.addItem((item) => {
+						item.setTitle(t('plugin.publishMenu'))
+							.setIcon('upload')
+							.onClick(() => this.publishFile(file));
 					});
 				}
 			}),
@@ -151,7 +154,6 @@ export default class VanBlogPlugin extends Plugin {
 	async saveSettings(): Promise<void> {
 		const data: Record<string, unknown> = {
 			settings: this.settings,
-			articles: this.pluginData.articles,
 			availableTags: this.availableTags,
 			availableCategories: this.availableCategories,
 		};
@@ -160,27 +162,6 @@ export default class VanBlogPlugin extends Plugin {
 		if (this.api) {
 			this.api.setCredentials(this.settings.baseUrl, this.settings.apiToken);
 		}
-	}
-
-	private async loadPluginData(): Promise<void> {
-		const data =
-			((await this.loadData()) as Record<string, unknown>) ?? {};
-		const stored = data.articles;
-		if (stored && typeof stored === 'object') {
-			this.pluginData = {
-				articles: stored as Record<string, ArticleRecord>,
-			};
-		}
-	}
-
-	private async savePluginData(): Promise<void> {
-		const data: Record<string, unknown> = {
-			settings: this.settings,
-			articles: this.pluginData.articles,
-			availableTags: this.availableTags,
-			availableCategories: this.availableCategories,
-		};
-		await this.saveData(data);
 	}
 
 	// ──── Fetch tags & categories from VanBlog ────────────
@@ -407,36 +388,21 @@ export default class VanBlogPlugin extends Plugin {
 		const finalPayload = result.payload;
 
 		// 7. Check for existing published article → update vs create
-		//    Prefer the server-side check (existingArticle) over local data
-		//    to avoid creating duplicates when local data is out of sync.
-		const existingLocal = getRecord(this.pluginData, file.path);
-		const serverArticleId = existingArticle?.id ?? existingLocal?.articleId;
-		let articleId: string | number;
+		//    Use server-side check (existingArticle) to determine if this is
+		//    an update or new publish. The frontmatter vanblog-id is the source of truth.
+		const serverArticleId = existingArticle?.id ?? frontmatter.vanblogId;
 
 		if (serverArticleId) {
 			// Update existing article (exists on VanBlog server)
 			const updatedRes = await this.api.updateArticle(serverArticleId, finalPayload);
-			articleId = serverArticleId;
-			await this.writeVanBlogProps(file, articleId, finalPayload, updatedRes.pathname);
+			await this.writeVanBlogProps(file, serverArticleId, finalPayload, updatedRes.pathname);
 			new Notice(t('publish.updated') + finalPayload.title + t('publish.updatedEnd'));
 		} else {
 			// Create new article
 			const created = await this.api.createArticle(finalPayload);
-			articleId = created.id;
-			await this.writeVanBlogProps(file, articleId, finalPayload, created.pathname);
+			await this.writeVanBlogProps(file, created.id, finalPayload, created.pathname);
 			new Notice(t('publish.published') + finalPayload.title + t('publish.publishedEnd'));
 		}
-
-		// 8. Store mapping
-		const record: ArticleRecord = {
-			filePath: file.path,
-			articleId,
-			title: finalPayload.title,
-			publishedAt: new Date().toISOString(),
-			isPublished: true,
-		};
-		setRecord(this.pluginData, file.path, record);
-		await this.savePluginData();
 	}
 
 	// ──── Revoke flow ──────────────────────────────────────
@@ -450,14 +416,19 @@ export default class VanBlogPlugin extends Plugin {
 	}
 
 	private async doRevoke(file: TFile): Promise<void> {
-		const record = getRecord(this.pluginData, file.path);
-		if (!record?.isPublished) {
+		// Read frontmatter to get vanblog-id
+		const content = await this.app.vault.read(file);
+		const { frontmatter } = parseFrontMatter(content);
+
+		if (!frontmatter.vanblogId) {
 			new Notice(t('revoke.notFound'));
 			return;
 		}
 
+		const title = frontmatter.title ?? file.basename;
+
 		// Confirmation modal
-		const modal = new RevokeModal(this.app, file.name, record.title);
+		const modal = new RevokeModal(this.app, file.name, title);
 		modal.open();
 		const confirmed = await modal.waitForResult();
 		if (!confirmed) {
@@ -465,11 +436,14 @@ export default class VanBlogPlugin extends Plugin {
 			return;
 		}
 
-		await this.api.deleteArticle(record.articleId);
-		removeRecord(this.pluginData, file.path);
-		await this.savePluginData();
+		// Delete from VanBlog server
+		await this.api.deleteArticle(frontmatter.vanblogId);
 
-		new Notice(t('revoke.success') + record.title + t('revoke.successEnd'));
+		// Strip vanblog properties from frontmatter
+		const newContent = stripVanBlogProperties(content);
+		await this.app.vault.modify(file, newContent);
+
+		new Notice(t('revoke.success') + title + t('revoke.successEnd'));
 	}
 
 	// ──── Embedded file upload ─────────────────────────────
@@ -517,18 +491,12 @@ export default class VanBlogPlugin extends Plugin {
 	): Promise<void> {
 		try {
 			const baseUrl = this.settings.baseUrl.replace(/\/+$/, '');
-			const url = pathname ? `${baseUrl}/article/${pathname}` : baseUrl;
+			const url = pathname ? `${baseUrl}/post/${pathname}` : baseUrl;
 			const props: VanBlogFileProps = {
 				'vanblog-id': articleId,
-				'vanblog-published-at': new Date().toISOString(),
+				'vanblog-published-at': this.formatDate(new Date()),
 				'vanblog-url': url,
 			};
-			if (payload.tags && payload.tags.length > 0) {
-				props['vanblog-tags'] = payload.tags;
-			}
-			if (payload.category) {
-				props['vanblog-category'] = payload.category;
-			}
 
 			const currentContent = await this.app.vault.read(file);
 			const newContent = addVanBlogProperties(currentContent, props);
@@ -536,6 +504,11 @@ export default class VanBlogPlugin extends Plugin {
 		} catch (err) {
 			console.error('[VanBlog] Failed to write properties:', err);
 		}
+	}
+
+	private formatDate(date: Date): string {
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 	}
 
 	private getMimeType(ext: string): string {
