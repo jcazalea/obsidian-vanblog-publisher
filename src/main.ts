@@ -22,7 +22,7 @@ import {
 	type VanBlogSettings,
 } from './settings';
 import { VanBlogApiClient, VanBlogApiError } from './api/client';
-import type { ArticlePayload, ArticleRecord } from './api/types';
+import type { ArticlePayload, ArticleRecord, ArticleResponse } from './api/types';
 import {
 	findEmbeddedFiles,
 	applyReplacements,
@@ -57,6 +57,8 @@ export default class VanBlogPlugin extends Plugin {
 		await this.loadSettings();
 		await this.loadPluginData();
 
+		// Initialise i18n locale (resolve 'obsidian' to actual language)
+		useLocale(resolveLocale(this.settings.locale, this));
 		this.api = new VanBlogApiClient(
 			this.settings.baseUrl,
 			this.settings.apiToken,
@@ -319,30 +321,42 @@ export default class VanBlogPlugin extends Plugin {
 		const title =
 			frontmatter.title ?? file.basename;
 
-		// 3. Gather article payload from front‑matter + settings
+		// 3. If the file has a vanblog-id, fetch the existing article to pre-fill
+		let existingArticle: ArticleResponse | null = null;
+		if (frontmatter.vanblogId) {
+			try {
+				existingArticle = await this.api.getArticle(frontmatter.vanblogId);
+			} catch {
+				// Ignore fetch errors; fall back to local data
+			}
+		}
+
+		// 4. Gather article payload from front‑matter + VanBlog API
 		const now = new Date().toISOString();
 		const payload: ArticlePayload = {
-			title,
-			content: body,
+			title: existingArticle?.title ?? title,
+			content: existingArticle?.content ?? body,
 			tags:
-				frontmatter.tags?.length
-					? frontmatter.tags
-					: this.settings.defaultTags
-						? this.settings.defaultTags.split(',').map((t) => t.trim()).filter(Boolean)
-						: undefined,
-			category: frontmatter.category || this.settings.defaultCategory || undefined,
-			top: frontmatter.top,
-			hidden: frontmatter.hide,
-			private: frontmatter.password ? true : undefined,
-			password: frontmatter.password || undefined,
-			pathname: frontmatter.slug,
-			copyright: frontmatter.copyright,
-			author: frontmatter.author,
-			createdAt: frontmatter.date || now,
+				existingArticle?.tags?.length
+					? existingArticle.tags
+					: frontmatter.tags?.length
+						? frontmatter.tags
+						: this.settings.defaultTags
+							? this.settings.defaultTags.split(',').map((t) => t.trim()).filter(Boolean)
+							: undefined,
+			category: existingArticle?.category || frontmatter.category || this.settings.defaultCategory || undefined,
+			top: existingArticle?.top ?? frontmatter.top,
+			hidden: existingArticle?.hidden ?? frontmatter.hide,
+			private: existingArticle?.private ?? (frontmatter.password ? true : undefined),
+			password: existingArticle?.password || frontmatter.password || undefined,
+			pathname: existingArticle?.pathname || frontmatter.slug,
+			copyright: existingArticle?.copyright || frontmatter.copyright,
+			author: existingArticle?.author || frontmatter.author,
+			createdAt: existingArticle?.createdAt || frontmatter.date || now,
 			updatedAt: now,
 		};
 
-		// 4. Handle embedded media if the setting is on
+		// 5. Handle embedded media if the setting is on
 		if (this.settings.autoUploadMedia) {
 			const embeddedRefs = findEmbeddedFiles(body, sourceDir);
 			if (embeddedRefs.length > 0) {
@@ -371,7 +385,7 @@ export default class VanBlogPlugin extends Plugin {
 			}
 		}
 
-		// 5. Show publish modal for confirmation / editing — pass available tags & categories
+		// 6. Show publish modal for confirmation / editing — pass available tags & categories
 		const modal = new PublishModal(
 			this.app,
 			file.name,
@@ -389,7 +403,7 @@ export default class VanBlogPlugin extends Plugin {
 
 		const finalPayload = result.payload;
 
-		// 6. Check for existing published article → update vs create
+		// 7. Check for existing published article → update vs create
 		const existing = getRecord(this.pluginData, file.path);
 		let articleId: string | number;
 
@@ -407,7 +421,7 @@ export default class VanBlogPlugin extends Plugin {
 			new Notice(t('publish.published') + finalPayload.title + t('publish.publishedEnd'));
 		}
 
-		// 7. Store mapping
+		// 8. Store mapping
 		const record: ArticleRecord = {
 			filePath: file.path,
 			articleId,

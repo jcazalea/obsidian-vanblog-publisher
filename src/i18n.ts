@@ -27,10 +27,14 @@ export function resolveLocale(
 	plugin?: VanBlogPlugin,
 ): 'zh' | 'en' {
 	if (locale === 'obsidian') {
-		// Try Obsidian's language config, fall back to navigator/browser
+		// Try Obsidian's language config (in order of reliability)
 		try {
 			const lang =
+				// 1. Obsidian stores the language in localStorage
+				window.localStorage.getItem('language') ??
+				// 2. Plugin API (may not be available on all versions)
 				(plugin?.app as any)?.vault?.getConfig?.('language') ??
+				// 3. Browser / OS language
 				navigator.language ??
 				'en';
 			return lang.startsWith('zh') ? 'zh' : 'en';

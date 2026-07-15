@@ -154,6 +154,7 @@ export interface FrontMatter {
 	hide?: boolean;
 	slug?: string;
 		copyright?: string;
+	vanblogId?: string | number;
 	author?: string;
 	date?: string;
 }
@@ -222,21 +223,26 @@ export function parseFrontMatter(content: string): {
 
 			if (key === 'slug') {
 				frontmatter.slug = String(value).replace(/^['"]|['"]$/g, '');
+				continue;
+			}
 
-			if ((key as string) === 'copyright') {
+			if (key === 'copyright') {
 				frontmatter.copyright = String(value).replace(/^['"]|['"]$/g, '');
 				continue;
 			}
-				continue;
-			}
 
-			if ((key as string) === 'author') {
+			if (key === 'author') {
 				frontmatter.author = String(value).replace(/^['"]|['"]$/g, '');
 				continue;
 			}
 
-			if ((key as string) === 'date') {
+			if (key === 'date') {
 				frontmatter.date = String(value).replace(/^['"]|['"]$/g, '');
+				continue;
+			}
+
+			if (key === 'vanblog-id') {
+				frontmatter.vanblogId = Number(value) || String(value).replace(/^['"]|['"]$/g, '');
 				continue;
 			}
 		}
