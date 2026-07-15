@@ -137,6 +137,8 @@ const dict: Dict = {
 	'settings.defaultHideDesc':       { zh: '发布时默认在首页隐藏文章，可在发布弹窗中单独修改', en: 'Hide articles from the front page by default. Can be overridden per article in the publish dialog.' },
 	'settings.autoUpload':            { zh: '自动上传媒体文件', en: 'Auto-upload embedded media' },
 	'settings.autoUploadDesc':        { zh: '发布时自动将文档中的图片/附件上传到 VanBlog 图床，并替换为远程地址', en: 'Upload images/attachments to VanBlog before publishing and replace local paths with remote URLs.' },
+	'settings.deleteFilesOnRevoke':   { zh: '撤回时删除已上传文件', en: 'Delete uploaded files on revoke' },
+	'settings.deleteFilesOnRevokeDesc': { zh: '撤回发布时，同步删除 VanBlog 图床中该文档上传的所有文件', en: 'When revoking, also delete all files uploaded for this document from VanBlog image hosting.' },
 	'settings.none':                  { zh: '— 无 —', en: '— None —' },
 
 	// ── Publish modal ──

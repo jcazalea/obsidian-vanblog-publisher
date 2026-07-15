@@ -246,6 +246,12 @@ export class VanBlogApiClient {
 		return this.parseResponse<UploadResponse>(res);
 	}
 
+	async deleteFile(id: string): Promise<void> {
+		await this.request<unknown>(`/api/admin/img/${id}`, {
+			method: 'DELETE',
+		});
+	}
+
 	// ──── Internal helpers ─────────────────────────────────
 
 	/**

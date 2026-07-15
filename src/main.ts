@@ -341,6 +341,7 @@ export default class VanBlogPlugin extends Plugin {
 		};
 
 		// 5. Handle embedded media if the setting is on
+		const uploadedImageUrls: string[] = [];
 		if (this.settings.autoUploadMedia) {
 			const embeddedRefs = findEmbeddedFiles(body, sourceDir);
 			if (embeddedRefs.length > 0) {
@@ -355,6 +356,7 @@ export default class VanBlogPlugin extends Plugin {
 							rawPath: ref.rawPath,
 							remoteUrl,
 						});
+						uploadedImageUrls.push(remoteUrl);
 					} catch (err) {
 						console.warn(
 							`[VanBlog] Failed to upload "${ref.filePath}":`,
@@ -395,12 +397,12 @@ export default class VanBlogPlugin extends Plugin {
 		if (serverArticleId) {
 			// Update existing article (exists on VanBlog server)
 			const updatedRes = await this.api.updateArticle(serverArticleId, finalPayload);
-			await this.writeVanBlogProps(file, serverArticleId, finalPayload, updatedRes.pathname);
+			await this.writeVanBlogProps(file, serverArticleId, finalPayload, updatedRes.pathname, uploadedImageUrls);
 			new Notice(t('publish.updated') + finalPayload.title + t('publish.updatedEnd'));
 		} else {
 			// Create new article
 			const created = await this.api.createArticle(finalPayload);
-			await this.writeVanBlogProps(file, created.id, finalPayload, created.pathname);
+			await this.writeVanBlogProps(file, created.id, finalPayload, created.pathname, uploadedImageUrls);
 			new Notice(t('publish.published') + finalPayload.title + t('publish.publishedEnd'));
 		}
 	}
@@ -434,6 +436,11 @@ export default class VanBlogPlugin extends Plugin {
 		if (!confirmed) {
 			new Notice(t('revoke.cancelled'));
 			return;
+		}
+
+		// Delete uploaded files from VanBlog if configured
+		if (this.settings.deleteFilesOnRevoke) {
+			await this.deleteUploadedFiles(content);
 		}
 
 		// Delete from VanBlog server
@@ -538,6 +545,31 @@ export default class VanBlogPlugin extends Plugin {
 		await this.app.vault.modify(file, newContent);
 	}
 
+	/**
+	 * Delete all uploaded files listed in vanblog-images frontmatter.
+	 * Extracts the file hash from URLs like:
+	 *   /static/img/e75f4c0154e7141b415d88c940a132e7.qr8su9vmuad4hc1o.webp
+	 *   → extracts "e75f4c0154e7141b415d88c940a132e7"
+	 */
+	private async deleteUploadedFiles(content: string): Promise<void> {
+		const match = content.match(/^vanblog-images:\s*(.+)$/m);
+		if (!match?.[1]) return;
+
+		const urls = match[1].split(',').map((u) => u.trim()).filter(Boolean);
+		for (const url of urls) {
+			try {
+				// Extract filename from URL path, then get the hash (before first dot)
+				const filename = url.split('/').pop() ?? '';
+				const fileId = filename.split('.')[0];
+				if (fileId) {
+					await this.api.deleteFile(fileId);
+				}
+			} catch (err) {
+				console.warn(`[VanBlog] Failed to delete file "${url}":`, err);
+			}
+		}
+	}
+
 	// ──── Utilities ────────────────────────────────────────
 
 	/**
@@ -574,6 +606,7 @@ export default class VanBlogPlugin extends Plugin {
 		articleId: string | number,
 		payload: ArticlePayload,
 		pathname: string,
+		imageUrls: string[] = [],
 	): Promise<void> {
 		try {
 			const baseUrl = this.settings.baseUrl.replace(/\/+$/, '');
@@ -583,6 +616,9 @@ export default class VanBlogPlugin extends Plugin {
 				'vanblog-published-at': this.formatDate(new Date()),
 				'vanblog-url': url,
 			};
+			if (imageUrls.length > 0) {
+				props['vanblog-images'] = imageUrls.join(', ');
+			}
 
 			const currentContent = await this.app.vault.read(file);
 			const newContent = addVanBlogProperties(currentContent, props);

@@ -323,6 +323,7 @@ export interface VanBlogFileProps {
 	'vanblog-id': string | number;
 	'vanblog-published-at': string;
 	'vanblog-url': string;
+	'vanblog-images'?: string;
 }
 
 /**

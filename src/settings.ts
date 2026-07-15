@@ -18,6 +18,7 @@ export interface VanBlogSettings {
 	defaultAuthor: string;
 	defaultHide: boolean;
 	autoUploadMedia: boolean;
+	deleteFilesOnRevoke: boolean;
 	locale: Locale;
 }
 
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: VanBlogSettings = {
 	defaultAuthor: '',
 	defaultHide: false,
 	autoUploadMedia: true,
+	deleteFilesOnRevoke: false,
 	locale: 'obsidian',
 };
 
@@ -209,6 +211,18 @@ export class VanBlogSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.autoUploadMedia)
 					.onChange(async (value) => {
 						this.plugin.settings.autoUploadMedia = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName(t('settings.deleteFilesOnRevoke'))
+			.setDesc(t('settings.deleteFilesOnRevokeDesc'))
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.deleteFilesOnRevoke)
+					.onChange(async (value) => {
+						this.plugin.settings.deleteFilesOnRevoke = value;
 						await this.plugin.saveSettings();
 					}),
 			);
