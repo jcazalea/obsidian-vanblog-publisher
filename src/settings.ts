@@ -15,6 +15,7 @@ export interface VanBlogSettings {
 	apiToken: string;
 	defaultCategory: string;
 	defaultTags: string;
+	defaultAuthor: string;
 	autoUploadMedia: boolean;
 	locale: Locale;
 }
@@ -24,6 +25,7 @@ export const DEFAULT_SETTINGS: VanBlogSettings = {
 	apiToken: '',
 	defaultCategory: '',
 	defaultTags: '',
+	defaultAuthor: '',
 	autoUploadMedia: true,
 	locale: 'obsidian',
 };
@@ -42,6 +44,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 
 		this.renderConnectionSection(containerEl);
 		this.renderLanguageSection(containerEl);
+		this.renderDefaultOptionsSection(containerEl);
 		this.renderTagManagementSection(containerEl);
 		this.renderCategoryManagementSection(containerEl);
 	}
@@ -127,6 +130,65 @@ export class VanBlogSettingTab extends PluginSettingTab {
 					this.display();
 				});
 			});
+
+		containerEl.createEl('hr');
+	}
+
+	// ──── Default publish options ──────────────────────
+
+	private renderDefaultOptionsSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h2', { text: t('settings.defaultOptions') });
+
+		new Setting(containerEl)
+			.setName(t('settings.defaultCategory'))
+			.setDesc(t('settings.defaultCategoryDesc'))
+			.addText((text) =>
+				text
+					.setPlaceholder(t('settings.none'))
+					.setValue(this.plugin.settings.defaultCategory)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultCategory = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName(t('settings.defaultTag'))
+			.setDesc(t('settings.defaultTagDesc'))
+			.addText((text) =>
+				text
+					.setPlaceholder(t('settings.none'))
+					.setValue(this.plugin.settings.defaultTags)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultTags = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName(t('settings.defaultAuthor'))
+			.setDesc(t('settings.defaultAuthorDesc'))
+			.addText((text) =>
+				text
+					.setPlaceholder(t('settings.defaultAuthorPlaceholder'))
+					.setValue(this.plugin.settings.defaultAuthor)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultAuthor = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName(t('settings.autoUpload'))
+			.setDesc(t('settings.autoUploadDesc'))
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoUploadMedia)
+					.onChange(async (value) => {
+						this.plugin.settings.autoUploadMedia = value;
+						await this.plugin.saveSettings();
+					}),
+			);
 
 		containerEl.createEl('hr');
 	}

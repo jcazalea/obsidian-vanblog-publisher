@@ -331,28 +331,30 @@ export default class VanBlogPlugin extends Plugin {
 			}
 		}
 
-		// 4. Gather article payload from front‑matter + VanBlog API
+		// 4. Gather article payload from front‑matter + settings + VanBlog API
+		//    Priority: frontmatter > settings defaults > existing server data
+		//    This ensures user edits in front-matter always take effect on re-publish.
 		const now = new Date().toISOString();
 		const payload: ArticlePayload = {
-			title: existingArticle?.title ?? title,
-			content: existingArticle?.content ?? body,
+			title: title || existingArticle?.title || '',
+			content: body || existingArticle?.content || '',
 			tags:
-				existingArticle?.tags?.length
-					? existingArticle.tags
-					: frontmatter.tags?.length
-						? frontmatter.tags
-						: this.settings.defaultTags
-							? this.settings.defaultTags.split(',').map((t) => t.trim()).filter(Boolean)
+				frontmatter.tags?.length
+					? frontmatter.tags
+					: this.settings.defaultTags
+						? this.settings.defaultTags.split(',').map((t) => t.trim()).filter(Boolean)
+						: existingArticle?.tags?.length
+							? existingArticle.tags
 							: undefined,
-			category: existingArticle?.category || frontmatter.category || this.settings.defaultCategory || undefined,
-			top: existingArticle?.top ?? frontmatter.top,
-			hidden: existingArticle?.hidden ?? frontmatter.hide,
-			private: existingArticle?.private ?? (frontmatter.password ? true : undefined),
-			password: existingArticle?.password || frontmatter.password || undefined,
-			pathname: existingArticle?.pathname || frontmatter.slug,
-			copyright: existingArticle?.copyright || frontmatter.copyright,
-			author: existingArticle?.author || frontmatter.author,
-			createdAt: existingArticle?.createdAt || frontmatter.date || now,
+			category: frontmatter.category || this.settings.defaultCategory || existingArticle?.category || undefined,
+			top: frontmatter.top ?? existingArticle?.top,
+			hidden: frontmatter.hide ?? existingArticle?.hidden,
+			private: (frontmatter.password ? true : undefined) ?? existingArticle?.private,
+			password: frontmatter.password || existingArticle?.password || undefined,
+			pathname: frontmatter.slug || existingArticle?.pathname,
+			copyright: frontmatter.copyright || existingArticle?.copyright,
+			author: frontmatter.author || this.settings.defaultAuthor || existingArticle?.author || undefined,
+			createdAt: frontmatter.date || existingArticle?.createdAt || now,
 			updatedAt: now,
 		};
 
@@ -404,17 +406,20 @@ export default class VanBlogPlugin extends Plugin {
 		const finalPayload = result.payload;
 
 		// 7. Check for existing published article → update vs create
-		const existing = getRecord(this.pluginData, file.path);
+		//    Prefer the server-side check (existingArticle) over local data
+		//    to avoid creating duplicates when local data is out of sync.
+		const existingLocal = getRecord(this.pluginData, file.path);
+		const serverArticleId = existingArticle?.id ?? existingLocal?.articleId;
 		let articleId: string | number;
 
-		if (existing?.isPublished && existing.articleId) {
-			// Update
-			const updatedRes = await this.api.updateArticle(existing.articleId, finalPayload);
-			articleId = existing.articleId;
+		if (serverArticleId) {
+			// Update existing article (exists on VanBlog server)
+			const updatedRes = await this.api.updateArticle(serverArticleId, finalPayload);
+			articleId = serverArticleId;
 			await this.writeVanBlogProps(file, articleId, finalPayload, updatedRes.pathname);
 			new Notice(t('publish.updated') + finalPayload.title + t('publish.updatedEnd'));
 		} else {
-			// Create
+			// Create new article
 			const created = await this.api.createArticle(finalPayload);
 			articleId = created.id;
 			await this.writeVanBlogProps(file, articleId, finalPayload, created.pathname);

@@ -242,6 +242,18 @@ export class PublishModal extends Modal {
 				}),
 			);
 
+		// ── Author ──
+		new Setting(contentEl)
+			.setName(t('publish.author'))
+			.addText((text) =>
+				text
+					.setPlaceholder(t('publish.authorPlaceholder'))
+					.setValue(this.payload.author ?? '')
+					.onChange((value) => {
+						this.payload.author = value || undefined;
+					}),
+			);
+
 		// ── Buttons ──
 		const btnContainer = contentEl.createDiv({
 			attr: {
