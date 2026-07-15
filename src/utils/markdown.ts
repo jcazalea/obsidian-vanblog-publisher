@@ -1,0 +1,254 @@
+/**
+ * Markdown utilities for the VanBlog Publisher plugin.
+ *
+ * Responsible for:
+ *   - Parsing embedded file references (images, attachments) from markdown content.
+ *   - Replacing local paths with remote URLs after upload.
+ *   - Extracting front‑matter (title, tags, category).
+ */
+
+import { type TFile, type Vault } from 'obsidian';
+
+// ──────────────────── Embedded file detection ────────────────────
+
+export interface EmbeddedFileRef {
+	/**
+	 * The full match string as it appears in the source, e.g.
+	 *   `![[image.png]]` or `[asset](file:///path/to/file.pdf)`
+	 */
+	fullMatch: string;
+	/** The resolved file path inside the vault */
+	filePath: string;
+	/** File name (basename) */
+	fileName: string;
+}
+
+/**
+ * Regex patterns for Obsidian wiki‑style embeds and standard markdown links.
+ *
+ * Wiki‑style:   ![[file.png]]      or   ![[file.png|alt]]
+ *                 [[file.pdf]]      (non‑image embed)
+ * Markdown:     ![alt](path)       or   [text](path)
+ */
+const WIKI_IMAGE_RE = /!\[\[([^\]|]+(?:\.[a-zA-Z0-9]+))(?:\|[^\]]*)?\]\]/g;
+const WIKI_LINK_RE = /\[\[([^\]|]+(?:\.[a-zA-Z0-9]+))(?:\|[^\]]*)?\]\]/g;
+const MD_IMAGE_RE = /!\[([^\]]*)\]\(([^)]+)\)/g;
+const MD_LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/g;
+
+/** File extensions considered "embeddable media" that should be uploaded first. */
+const MEDIA_EXTENSIONS = new Set([
+	'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp',
+	'mp4', 'webm', 'ogg', 'mov',
+	'mp3', 'wav', 'flac', 'aac',
+	'pdf',
+]);
+
+function isMediaFile(fileName: string): boolean {
+	const ext = fileName.split('.').pop()?.toLowerCase();
+	return ext ? MEDIA_EXTENSIONS.has(ext) : false;
+}
+
+/**
+ * Scan markdown source and return all embedded file references.
+ *
+ * Both wiki‑style embeds (`![[image.png]]`) and standard markdown
+ * images/links (`![alt](./path)`) are detected.
+ */
+export function findEmbeddedFiles(content: string, sourceDir: string): EmbeddedFileRef[] {
+	const refs: EmbeddedFileRef[] = [];
+	const seen = new Set<string>();
+
+	const addRef = (fullMatch: string, rawPath: string) => {
+		// Skip URLs (http://, https://, data:)
+		if (/^(https?:|data:|file:\/\/)/i.test(rawPath)) return;
+		// Skip anchor-only
+		if (rawPath.startsWith('#')) return;
+		// Skip obsidian internal links (no extension → probably a note)
+		if (!rawPath.includes('.')) return;
+
+		// Decode URI-encoded paths
+		const decoded = decodeURIComponent(rawPath);
+		// Resolve relative to the source file's directory
+		const resolved = decoded.startsWith('/')
+			? decoded.slice(1)
+			: sourceDir
+				? `${sourceDir}/${decoded.replace(/^\.\//, '')}`
+				: decoded.replace(/^\.\//, '');
+
+		const key = resolved.toLowerCase();
+		if (seen.has(key)) return;
+		seen.add(key);
+
+		refs.push({
+			fullMatch,
+			filePath: resolved,
+			fileName: decoded.split('/').pop() ?? decoded,
+		});
+	};
+
+	// Wiki-style image embeds: ![[file.png]]
+	let match: RegExpExecArray | null;
+	while ((match = WIKI_IMAGE_RE.exec(content)) !== null) {
+		addRef(match[0], match[1]);
+	}
+
+	// Wiki-style link embeds: [[file.pdf]]
+	while ((match = WIKI_LINK_RE.exec(content)) !== null) {
+		if (!isMediaFile(match[1])) continue;
+		addRef(match[0], match[1]);
+	}
+
+	// Markdown images: ![alt](path)
+	while ((match = MD_IMAGE_RE.exec(content)) !== null) {
+		addRef(match[0], match[2]);
+	}
+
+	// Markdown links: [text](path)
+	while ((match = MD_LINK_RE.exec(content)) !== null) {
+		if (!isMediaFile(match[2])) continue;
+		addRef(match[0], match[2]);
+	}
+
+	return refs;
+}
+
+// ──────────────────── URL replacement ────────────────────
+
+export interface Replacement {
+	fullMatch: string;
+	remoteUrl: string;
+}
+
+/**
+ * Apply all replacements to the source content.
+ *
+ * @param content   Original markdown text
+ * @param replacements List of { fullMatch, remoteUrl } pairs
+ * @returns Content with every `fullMatch` replaced by `remoteUrl`
+ */
+export function applyReplacements(
+	content: string,
+	replacements: Replacement[],
+): string {
+	let result = content;
+	for (const { fullMatch, remoteUrl } of replacements) {
+		// Escape special regex chars in the match string
+		const escaped = fullMatch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		result = result.replace(new RegExp(escaped, 'g'), remoteUrl);
+	}
+	return result;
+}
+
+// ──────────────────── Front‑matter parsing ────────────────────
+
+/**
+ * Minimal YAML front‑matter parser.
+ *
+ * Only handles the fields we need: title, tags, category, top, password, hide.
+ */
+export interface FrontMatter {
+	title?: string;
+	tags?: string[];
+	category?: string;
+	top?: number;
+	password?: string;
+	hide?: boolean;
+	slug?: string;
+}
+
+/**
+ * Extract front‑matter and content body from a markdown string.
+ * Returns the parsed front‑matter and the body (with front‑matter stripped).
+ */
+export function parseFrontMatter(content: string): {
+	frontmatter: FrontMatter;
+	body: string;
+} {
+	const frontmatter: FrontMatter = {};
+	let body = content;
+
+	const fmMatch = /^---\n([\s\S]*?)\n---\n/.exec(content);
+	if (fmMatch) {
+		const raw = fmMatch[1];
+		body = content.slice(fmMatch[0].length);
+
+		// Simple line‑by‑line YAML parsing for known fields
+		const lines = raw.split('\n');
+		for (const line of lines) {
+			const colonIdx = line.indexOf(':');
+			if (colonIdx === -1) continue;
+
+			const key = line.slice(0, colonIdx).trim();
+			let value: unknown = line.slice(colonIdx + 1).trim();
+
+			if (key === 'tags') {
+				// tags: [tag1, tag2] or tags: tag1, tag2
+				const tagMatch = value.match(/^\[(.*)\]$/);
+				if (tagMatch) {
+					frontmatter.tags = tagMatch[1].split(',').map((t) => t.trim().replace(/['"]/g, '')).filter(Boolean);
+				} else if (typeof value === 'string' && value) {
+					frontmatter.tags = value.split(',').map((t) => t.trim().replace(/['"]/g, '')).filter(Boolean);
+				}
+				continue;
+			}
+
+			if (key === 'title') {
+				frontmatter.title = String(value).replace(/^['"]|['"]$/g, '');
+				continue;
+			}
+
+			if (key === 'category') {
+				frontmatter.category = String(value).replace(/^['"]|['"]$/g, '');
+				continue;
+			}
+
+			if (key === 'top' || key === 'priority') {
+				frontmatter.top = Number(value) || 0;
+				continue;
+			}
+
+			if (key === 'password') {
+				frontmatter.password = String(value).replace(/^['"]|['"]$/g, '');
+				continue;
+			}
+
+			if (key === 'hide' || key === 'hidden') {
+				frontmatter.hide =
+					value === 'true' || value === 'yes' || value === '1';
+				continue;
+			}
+
+			if (key === 'slug') {
+				frontmatter.slug = String(value).replace(/^['"]|['"]$/g, '');
+				continue;
+			}
+		}
+	}
+
+	return { frontmatter, body };
+}
+
+/**
+ * Prepend front‑matter to content.
+ * Useful when we need to add/update front-matter after publishing.
+ */
+export function withFrontMatter(
+	body: string,
+	frontmatter: FrontMatter,
+): string {
+	const lines = ['---'];
+	for (const [key, value] of Object.entries(frontmatter)) {
+		if (value === undefined || value === null) continue;
+		if (Array.isArray(value)) {
+			lines.push(`${key}: [${value.join(', ')}]`);
+		} else if (typeof value === 'boolean') {
+			lines.push(`${key}: ${value}`);
+		} else if (typeof value === 'number') {
+			lines.push(`${key}: ${value}`);
+		} else {
+			lines.push(`${key}: ${value}`);
+		}
+	}
+	lines.push('---', '');
+	return lines.join('\n') + body;
+}

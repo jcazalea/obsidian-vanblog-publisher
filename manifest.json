@@ -1,0 +1,11 @@
+{
+	"id": "obsidian-vanblog-publisher",
+	"name": "VanBlog Publisher",
+	"version": "1.0.0",
+	"minAppVersion": "1.0.0",
+	"description": "Publish and manage documents on your VanBlog blog system directly from Obsidian.",
+	"author": "azalea",
+	"authorUrl": "",
+	"fundingUrl": "",
+	"isDesktopOnly": false
+}
