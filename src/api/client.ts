@@ -278,9 +278,9 @@ export class VanBlogApiClient {
 		}
 
 		// VanBlog endpoints normally wrap the result in { code, message, data }
-		const body = res.json as { code?: number; statusCode?: number; message?: string; data?: T };
+		const body = res.json as { code?: number; statusCode?: number; message?: string; data?: unknown };
 
-		if (body.statusCode !== undefined && body.data !== undefined) {
+		if (body.data !== undefined) {
 			return body.data as T;
 		}
 

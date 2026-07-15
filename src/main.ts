@@ -479,6 +479,52 @@ export default class VanBlogPlugin extends Plugin {
 		return result.url;
 	}
 
+	// ──── Published documents management ──────────────────
+
+	/**
+	 * Scan the vault for files with vanblog-id in frontmatter,
+	 * then concurrently verify each against VanBlog via GET /api/admin/article/:id.
+	 */
+	async scanPublishedDocs(): Promise<{ file: TFile; vanblogId: string | number; existsOnVanBlog: boolean }[]> {
+		// 1. Collect local published docs
+		const files = this.app.vault.getMarkdownFiles();
+		const localItems: { file: TFile; vanblogId: string | number }[] = [];
+		for (const file of files) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const vanblogId = cache?.frontmatter?.['vanblog-id'];
+			if (vanblogId != null) {
+				localItems.push({ file, vanblogId });
+			}
+		}
+
+		if (localItems.length === 0) return [];
+
+		// 2. Concurrently verify each ID against VanBlog
+		const verifications = await Promise.all(
+			localItems.map(async (item) => {
+				let exists = false;
+				try {
+					const article = await this.api.getArticle(item.vanblogId);
+					exists = article?.id != null;
+				} catch {
+					exists = false;
+				}
+				return { ...item, existsOnVanBlog: exists };
+			}),
+		);
+
+		return verifications;
+	}
+
+	/**
+	 * Clear all vanblog-* properties from a file's frontmatter.
+	 */
+	async clearVanBlogProps(file: TFile): Promise<void> {
+		const content = await this.app.vault.read(file);
+		const newContent = stripVanBlogProperties(content);
+		await this.app.vault.modify(file, newContent);
+	}
+
 	// ──── Utilities ────────────────────────────────────────
 
 	// ---- Write VanBlog properties to file -------------------------------

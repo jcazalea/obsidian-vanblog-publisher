@@ -5,7 +5,7 @@
  * Fully internationalised (中文 / English).
  */
 
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting, TFile } from 'obsidian';
 import VanBlogPlugin from './main';
 import { t, useLocale, resolveLocale, type Locale } from './i18n';
 import { InputModal, ConfirmModal } from './modals/input-modal';
@@ -49,6 +49,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 		this.renderDefaultOptionsSection(containerEl);
 		this.renderTagManagementSection(containerEl);
 		this.renderCategoryManagementSection(containerEl);
+		this.renderPublishedDocsSection(containerEl);
 	}
 
 	// ──── Connection settings ───────────────────────────
@@ -260,7 +261,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 					attr: { style: 'display: flex; gap: 0.25rem;' },
 				});
 
-				btnGroup.createEl('button', {
+				/*btnGroup.createEl('button', {
 					text: t('settings.rename'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem;' },
 				}).onclick = async () => {
@@ -270,9 +271,9 @@ export class VanBlogSettingTab extends PluginSettingTab {
 						await this.plugin.updateTag(id, newName);
 						this.display();
 					});
-				};
+				};*/
 
-				btnGroup.createEl('button', {
+				/*btnGroup.createEl('button', {
 					text: t('settings.delete'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);' },
 				}).onclick = async () => {
@@ -282,7 +283,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 						await this.plugin.deleteTag(id, tagName);
 						this.display();
 					});
-				};
+				};*/
 			}
 		}
 
@@ -336,7 +337,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 					attr: { style: 'display: flex; gap: 0.25rem;' },
 				});
 
-				btnGroup.createEl('button', {
+				/*btnGroup.createEl('button', {
 					text: t('settings.rename'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem;' },
 				}).onclick = async () => {
@@ -346,9 +347,9 @@ export class VanBlogSettingTab extends PluginSettingTab {
 						await this.plugin.updateCategory(id, newName);
 						this.display();
 					});
-				};
+				};*/
 
-				btnGroup.createEl('button', {
+				/*btnGroup.createEl('button', {
 					text: t('settings.delete'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);' },
 				}).onclick = async () => {
@@ -358,13 +359,129 @@ export class VanBlogSettingTab extends PluginSettingTab {
 						await this.plugin.deleteCategory(id, catName);
 						this.display();
 					});
-				};
+				};*/
 			}
 		}
 
 		// (Add-category button removed — categories are auto‑managed by VanBlog)
 
 		containerEl.createEl('hr');
+	}
+
+	// ──── Published documents ─────────────────────────
+
+	private renderPublishedDocsSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h2', { text: t('settings.publishedDocs') });
+
+		// Container for the results table
+		const resultContainer = containerEl.createEl('div');
+
+		new Setting(containerEl)
+			.addButton((btn) => {
+				btn.setButtonText(t('settings.viewPublishedBtn'))
+					.setCta()
+					.onClick(async () => {
+						btn.setDisabled(true);
+						btn.setButtonText(t('settings.scanning'));
+						resultContainer.empty();
+						await this.renderPublishedDocsList(resultContainer);
+						btn.setDisabled(false);
+						btn.setButtonText(t('settings.viewPublishedBtn'));
+					});
+				return btn;
+			});
+
+		containerEl.createEl('hr');
+	}
+
+	private async renderPublishedDocsList(container: HTMLElement): Promise<void> {
+		const results = await this.plugin.scanPublishedDocs();
+
+		if (results.length === 0) {
+			container.createEl('p', {
+				text: t('settings.noPublishedDocs'),
+				attr: { style: 'color: var(--text-muted); padding: 1rem 0;' },
+			});
+			return;
+		}
+
+		// Build table
+		const table = container.createEl('table', {
+			attr: {
+				style: 'width: 100%; border-collapse: collapse; margin-top: 0.5rem;',
+			},
+		});
+
+		// Header
+		const thead = table.createEl('thead');
+		const headerRow = thead.createEl('tr');
+		headerRow.createEl('th', {
+			text: t('settings.docName'),
+			attr: { style: 'text-align: left; padding: 0.5rem; border-bottom: 2px solid var(--background-modifier-border);' },
+		});
+		headerRow.createEl('th', {
+			text: t('settings.vanblogExists'),
+			attr: { style: 'text-align: center; padding: 0.5rem; border-bottom: 2px solid var(--background-modifier-border);' },
+		});
+		headerRow.createEl('th', {
+			text: t('settings.actions'),
+			attr: { style: 'text-align: center; padding: 0.5rem; border-bottom: 2px solid var(--background-modifier-border);' },
+		});
+
+		// Body
+		const tbody = table.createEl('tbody');
+		for (const item of results) {
+			const row = tbody.createEl('tr');
+
+			// Document name
+			row.createEl('td', {
+				text: item.file.basename,
+				attr: { style: 'padding: 0.5rem; border-bottom: 1px solid var(--background-modifier-border);' },
+			});
+
+			// Exists on VanBlog?
+			row.createEl('td', {
+				text: item.existsOnVanBlog ? t('settings.yes') : t('settings.no'),
+				attr: {
+					style: `text-align: center; padding: 0.5rem; border-bottom: 1px solid var(--background-modifier-border); color: ${item.existsOnVanBlog ? 'var(--text-success)' : 'var(--text-error)'};`,
+				},
+			});
+
+			// Actions
+			const actionsCell = row.createEl('td', {
+				attr: {
+					style: 'text-align: center; padding: 0.5rem; border-bottom: 1px solid var(--background-modifier-border);',
+				},
+			});
+			const btnGroup = actionsCell.createEl('div', {
+				attr: { style: 'display: flex; justify-content: center; gap: 0.5rem;' },
+			});
+
+			// Details button
+			btnGroup.createEl('button', {
+				text: t('settings.detail'),
+				attr: { style: 'font-size: 0.8rem; padding: 0.2rem 0.6rem;' },
+			}).onclick = () => {
+				this.app.workspace.openLinkText(item.file.path, '', true);
+			};
+
+			// Clear properties button (only when not exists on VanBlog)
+			if (!item.existsOnVanBlog) {
+				btnGroup.createEl('button', {
+					text: t('settings.clearProps'),
+					attr: { style: 'font-size: 0.8rem; padding: 0.2rem 0.6rem; color: var(--text-error);' },
+				}).onclick = async () => {
+					const modal = new ConfirmModal(this.app, t('settings.clearPropsConfirm'));
+					modal.open();
+					const confirmed = await modal.waitForResult();
+					if (confirmed) {
+						await this.plugin.clearVanBlogProps(item.file);
+						row.remove();
+						new Notice(t('settings.cleared'));
+					}
+				};
+			}
+		}
 	}
 
 	// ──── Dialog helpers ───────────────────────────────

@@ -194,6 +194,22 @@ const dict: Dict = {
 	'plugin.publishFailed':           { zh: '发布失败', en: 'Publish failed' },
 	'plugin.revokeFailed':            { zh: '撤回失败', en: 'Revoke failed' },
 
+	// ── Published documents ──
+	'settings.publishedDocs':         { zh: '已发布的文档', en: 'Published Documents' },
+	'settings.publishedDocsDesc':    { zh: '查看和管理所有已发布到 VanBlog 的文档', en: 'View and manage all documents published to VanBlog' },
+	'settings.viewPublishedBtn':     { zh: '查看已发布的文档', en: 'View Published Documents' },
+	'settings.scanning':             { zh: '扫描中…', en: 'Scanning…' },
+	'settings.noPublishedDocs':      { zh: '未找到已发布的文档', en: 'No published documents found' },
+	'settings.docName':              { zh: '文档名称', en: 'Document Name' },
+	'settings.vanblogExists':        { zh: 'VanBlog 存在？', en: 'Exists on VanBlog?' },
+	'settings.actions':              { zh: '操作', en: 'Actions' },
+	'settings.detail':               { zh: '详情', en: 'Details' },
+	'settings.clearProps':           { zh: '清空属性', en: 'Clear Properties' },
+	'settings.clearPropsConfirm':    { zh: '确定要清空该文档的 VanBlog 属性吗？', en: 'Are you sure you want to clear VanBlog properties from this document?' },
+	'settings.cleared':              { zh: '已清空', en: 'Cleared' },
+	'settings.yes':                  { zh: '✓ 是', en: '✓ Yes' },
+	'settings.no':                   { zh: '✗ 否', en: '✗ No' },
+
 	// ── Errors ──
 	'error.upload':                   { zh: '上传嵌入文件失败', en: 'Failed to upload embedded file' },
 };
