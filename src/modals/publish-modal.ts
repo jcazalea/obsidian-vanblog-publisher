@@ -6,6 +6,7 @@
 
 import { App, Modal, Setting } from 'obsidian';
 import type { ArticlePayload } from '../api/types';
+import { t } from '../i18n';
 
 export interface PublishResult {
 	confirmed: boolean;
@@ -42,7 +43,7 @@ export class PublishModal extends Modal {
 			this.resolvePromise = resolve;
 		});
 
-		this.titleEl.setText(`Publish to VanBlog: ${fileName}`);
+		this.titleEl.setText(t('publish.title') + ': ' + fileName);
 		this.build();
 	}
 
@@ -56,10 +57,10 @@ export class PublishModal extends Modal {
 
 		// ── Title ──
 		new Setting(contentEl)
-			.setName('Title')
+			.setName(t('publish.titleField'))
 			.addText((text) =>
 				text
-					.setPlaceholder('Article title')
+					.setPlaceholder(t('publish.titlePlaceholder'))
 					.setValue(this.payload.title ?? '')
 					.onChange((value) => {
 						this.payload.title = value;
@@ -74,9 +75,9 @@ export class PublishModal extends Modal {
 		}
 
 		new Setting(contentEl)
-			.setName('Category')
+			.setName(t('publish.category'))
 			.addDropdown((dropdown) => {
-				dropdown.addOption('', '— None —');
+				dropdown.addOption('', t('settings.none'));
 				for (const c of [...catOptions].sort()) {
 					if (c) dropdown.addOption(c, c);
 				}
@@ -90,13 +91,13 @@ export class PublishModal extends Modal {
 		// We keep a text input showing the tags and a dropdown to add suggestions.
 		let tagInputRef: import('obsidian').TextComponent | null = null;
 		const tagSetting = new Setting(contentEl)
-			.setName('Tags')
-			.setDesc('Comma‑separated. Use the dropdown to add suggested tags.');
+			.setName(t('publish.tags'))
+			.setDesc(t('publish.tagsDesc'));
 
 		tagSetting.addText((text) => {
 			tagInputRef = text;
 			text
-				.setPlaceholder('tag1, tag2')
+				.setPlaceholder(t('publish.tagsPlaceholder'))
 				.setValue((this.payload.tags ?? []).join(', '))
 				.onChange((value) => {
 					this.payload.tags = value
@@ -108,7 +109,7 @@ export class PublishModal extends Modal {
 
 		// Dropdown for adding a tag from the suggestion list
 		tagSetting.addDropdown((dropdown) => {
-			dropdown.addOption('', '— Add tag —');
+			dropdown.addOption('', t('publish.addTag'));
 			for (const t of this.availableTags) {
 				if (t) dropdown.addOption(t, t);
 			}
@@ -129,11 +130,11 @@ export class PublishModal extends Modal {
 
 		// ── Slug ──
 		new Setting(contentEl)
-			.setName('Slug (optional)')
-			.setDesc('URL‑friendly identifier. Leave empty for auto‑generation.')
+			.setName(t('publish.slug'))
+			.setDesc(t('publish.slugDesc'))
 			.addText((text) =>
 				text
-					.setPlaceholder('my-article-slug')
+					.setPlaceholder(t('publish.slugPlaceholder'))
 					.setValue(this.payload.slug ?? '')
 					.onChange((value) => {
 						this.payload.slug = value || undefined;
@@ -142,8 +143,8 @@ export class PublishModal extends Modal {
 
 		// ── Pin / Top ──
 		new Setting(contentEl)
-			.setName('Pin priority')
-			.setDesc('0 = not pinned. Higher = higher display priority.')
+			.setName(t('publish.top'))
+			.setDesc(t('publish.topDesc'))
 			.addText((text) =>
 				text
 					.setPlaceholder('0')
@@ -155,8 +156,8 @@ export class PublishModal extends Modal {
 
 		// ── Password ──
 		new Setting(contentEl)
-			.setName('Password (optional)')
-			.setDesc('Password‑protect this article.')
+			.setName(t('publish.password'))
+			.setDesc(t('publish.passwordDesc'))
 			.addText((text) =>
 				text
 					.setPlaceholder('')
@@ -168,7 +169,7 @@ export class PublishModal extends Modal {
 
 		// ── Hide ──
 		new Setting(contentEl)
-			.setName('Hide from front page')
+			.setName(t('publish.hide'))
 			.addToggle((toggle) =>
 				toggle.setValue(this.payload.hide ?? false).onChange((value) => {
 					this.payload.hide = value;
@@ -183,13 +184,13 @@ export class PublishModal extends Modal {
 			},
 		});
 
-		btnContainer.createEl('button', { text: 'Cancel' }).onclick = () => {
+		btnContainer.createEl('button', { text: t('publish.cancel') }).onclick = () => {
 			this.result.confirmed = false;
 			this.close();
 		};
 
 		const publishBtn = btnContainer.createEl('button', {
-			text: 'Publish',
+			text: t('publish.publish'),
 			attr: {
 				style:
 					'background: var(--interactive-accent); color: var(--text-on-accent);',
@@ -198,7 +199,7 @@ export class PublishModal extends Modal {
 		publishBtn.onclick = () => {
 			// Validate title
 			if (!this.payload.title?.trim()) {
-				this.payload.title = 'Untitled';
+				this.payload.title = t('publish.untitled');
 			}
 			this.result.confirmed = true;
 			this.result.payload = { ...this.payload };

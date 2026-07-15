@@ -31,6 +31,7 @@ import {
 import { PublishModal } from './modals/publish-modal';
 import { RevokeModal } from './modals/revoke-modal';
 import { emptyData, getRecord, setRecord, removeRecord } from './data';
+import { t, useLocale, resolveLocale } from './i18n';
 
 export default class VanBlogPlugin extends Plugin {
 	settings!: VanBlogSettings;
@@ -66,7 +67,7 @@ export default class VanBlogPlugin extends Plugin {
 		// Commands (can be triggered from the command palette)
 		this.addCommand({
 			id: 'publish-to-vanblog',
-			name: 'Publish current file to VanBlog',
+			name: t('plugin.publishCmd'),
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file || file.extension !== 'md') return false;
@@ -79,7 +80,7 @@ export default class VanBlogPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'revoke-from-vanblog',
-			name: 'Revoke current file from VanBlog',
+			name: t('plugin.revokeCmd'),
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file || file.extension !== 'md') return false;
@@ -98,7 +99,7 @@ export default class VanBlogPlugin extends Plugin {
 				if (!(file instanceof TFile) || file.extension !== 'md') return;
 
 				menu.addItem((item) => {
-					item.setTitle('Publish to VanBlog')
+					item.setTitle(t('plugin.publishMenu'))
 						.setIcon('upload')
 						.onClick(() => this.publishFile(file));
 				});
@@ -106,7 +107,7 @@ export default class VanBlogPlugin extends Plugin {
 				const record = getRecord(this.pluginData, file.path);
 				if (record?.isPublished) {
 					menu.addItem((item) => {
-						item.setTitle('Revoke from VanBlog')
+						item.setTitle(t('plugin.revokeMenu'))
 							.setIcon('trash')
 							.onClick(() => this.revokeFile(file));
 					});
@@ -117,11 +118,11 @@ export default class VanBlogPlugin extends Plugin {
 		// Settings tab
 		this.addSettingTab(new VanBlogSettingTab(this.app, this));
 
-		new Notice('VanBlog Publisher loaded');
+		new Notice(t('plugin.loaded'));
 	}
 
 	onunload(): void {
-		new Notice('VanBlog Publisher unloaded');
+		new Notice(t('plugin.unloaded'));
 	}
 
 	// ──── Settings ─────────────────────────────────────────
@@ -188,7 +189,7 @@ export default class VanBlogPlugin extends Plugin {
 	 */
 	async fetchTagsAndCategories(): Promise<void> {
 		if (!this.settings.baseUrl || !this.settings.apiToken) {
-			new Notice('VanBlog: configure URL and API token first');
+			new Notice(t('settings.notConfigured'));
 			return;
 		}
 
@@ -219,7 +220,7 @@ export default class VanBlogPlugin extends Plugin {
 
 			await this.saveSettings();
 		} catch (err) {
-			this.handleError(err, 'Failed to fetch tags & categories');
+			this.handleError(err, t('settings.fetchFailed'));
 		}
 	}
 
@@ -230,11 +231,11 @@ export default class VanBlogPlugin extends Plugin {
 			try {
 				const ok = await this.api.testConnection();
 				if (ok) {
-					new Notice('VanBlog connection successful!');
+					new Notice(t('settings.testSuccess'));
 				}
 				return ok;
 			} catch (err) {
-				this.handleError(err, 'Connection test failed');
+				this.handleError(err, t('settings.testFailed'));
 				return false;
 			}
 		}
@@ -244,30 +245,30 @@ export default class VanBlogPlugin extends Plugin {
 		async createTag(name: string): Promise<void> {
 			try {
 				await this.api.createTag(name);
-				new Notice('Tag "' + name + '" created');
+				new Notice(t('settings.tagCreated') + name + t('settings.tagCreatedEnd'));
 				await this.fetchTagsAndCategories();
 			} catch (err) {
-				this.handleError(err, 'Failed to create tag');
+				this.handleError(err, t('settings.createTagFailed'));
 			}
 		}
 
 		async updateTag(id: string | number, name: string): Promise<void> {
 			try {
 				await this.api.updateTag(id, name);
-				new Notice('Tag updated to "' + name + '"');
+				new Notice(t('settings.tagUpdated') + name + t('settings.tagUpdatedEnd'));
 				await this.fetchTagsAndCategories();
 			} catch (err) {
-				this.handleError(err, 'Failed to update tag');
+				this.handleError(err, t('settings.updateTagFailed'));
 			}
 		}
 
 		async deleteTag(id: string | number, name: string): Promise<void> {
 			try {
 				await this.api.deleteTag(id);
-				new Notice('Tag "' + name + '" deleted');
+				new Notice(t('settings.tagDeleted') + name + t('settings.tagDeletedEnd'));
 				await this.fetchTagsAndCategories();
 			} catch (err) {
-				this.handleError(err, 'Failed to delete tag');
+				this.handleError(err, t('settings.deleteTagFailed'));
 			}
 		}
 
@@ -276,30 +277,30 @@ export default class VanBlogPlugin extends Plugin {
 		async createCategory(name: string): Promise<void> {
 			try {
 				await this.api.createCategory(name);
-				new Notice('Category "' + name + '" created');
+				new Notice(t('settings.categoryCreated') + name + t('settings.categoryCreatedEnd'));
 				await this.fetchTagsAndCategories();
 			} catch (err) {
-				this.handleError(err, 'Failed to create category');
+				this.handleError(err, t('settings.createCategoryFailed'));
 			}
 		}
 
 		async updateCategory(id: string | number, name: string): Promise<void> {
 			try {
 				await this.api.updateCategory(id, name);
-				new Notice('Category updated to "' + name + '"');
+				new Notice(t('settings.categoryUpdated') + name + t('settings.categoryUpdatedEnd'));
 				await this.fetchTagsAndCategories();
 			} catch (err) {
-				this.handleError(err, 'Failed to update category');
+				this.handleError(err, t('settings.updateCategoryFailed'));
 			}
 		}
 
 		async deleteCategory(id: string | number, name: string): Promise<void> {
 			try {
 				await this.api.deleteCategory(id);
-				new Notice('Category "' + name + '" deleted');
+				new Notice(t('settings.categoryDeleted') + name + t('settings.categoryDeletedEnd'));
 				await this.fetchTagsAndCategories();
 			} catch (err) {
-				this.handleError(err, 'Failed to delete category');
+				this.handleError(err, t('settings.deleteCategoryFailed'));
 			}
 		}
 
@@ -309,7 +310,7 @@ export default class VanBlogPlugin extends Plugin {
 		try {
 			await this.doPublish(file);
 		} catch (err) {
-			this.handleError(err, 'Publish failed');
+			this.handleError(err, t('plugin.publishFailed'));
 		}
 	}
 
@@ -344,9 +345,7 @@ export default class VanBlogPlugin extends Plugin {
 		if (this.settings.autoUploadMedia) {
 			const embeddedRefs = findEmbeddedFiles(body, sourceDir);
 			if (embeddedRefs.length > 0) {
-				new Notice(
-					`Uploading ${embeddedRefs.length} embedded file(s)…`,
-				);
+				new Notice(t('publish.uploading', { count: embeddedRefs.length }));
 
 				const replacements: { fullMatch: string; remoteUrl: string }[] = [];
 				for (const ref of embeddedRefs) {
@@ -383,7 +382,7 @@ export default class VanBlogPlugin extends Plugin {
 		const result = await modal.waitForResult();
 
 		if (!result.confirmed) {
-			new Notice('Publish cancelled');
+			new Notice(t('publish.cancelled'));
 			return;
 		}
 
@@ -397,12 +396,12 @@ export default class VanBlogPlugin extends Plugin {
 			// Update
 			await this.api.updateArticle(existing.articleId, finalPayload);
 			articleId = existing.articleId;
-			new Notice(`Updated "${finalPayload.title}" on VanBlog`);
+			new Notice(t('publish.updated') + finalPayload.title + t('publish.updatedEnd'));
 		} else {
 			// Create
 			const created = await this.api.createArticle(finalPayload);
 			articleId = created.id;
-			new Notice(`Published "${finalPayload.title}" to VanBlog`);
+			new Notice(t('publish.published') + finalPayload.title + t('publish.publishedEnd'));
 		}
 
 		// 7. Store mapping
@@ -423,14 +422,14 @@ export default class VanBlogPlugin extends Plugin {
 		try {
 			await this.doRevoke(file);
 		} catch (err) {
-			this.handleError(err, 'Revoke failed');
+			this.handleError(err, t('plugin.revokeFailed'));
 		}
 	}
 
 	private async doRevoke(file: TFile): Promise<void> {
 		const record = getRecord(this.pluginData, file.path);
 		if (!record?.isPublished) {
-			new Notice('This file is not published on VanBlog');
+			new Notice(t('revoke.notFound'));
 			return;
 		}
 
@@ -439,7 +438,7 @@ export default class VanBlogPlugin extends Plugin {
 		modal.open();
 		const confirmed = await modal.waitForResult();
 		if (!confirmed) {
-			new Notice('Revoke cancelled');
+			new Notice(t('revoke.cancelled'));
 			return;
 		}
 
@@ -447,7 +446,7 @@ export default class VanBlogPlugin extends Plugin {
 		removeRecord(this.pluginData, file.path);
 		await this.savePluginData();
 
-		new Notice(`Revoked "${record.title}" from VanBlog`);
+		new Notice(t('revoke.success') + record.title + t('revoke.successEnd'));
 	}
 
 	// ──── Embedded file upload ─────────────────────────────

@@ -3,6 +3,7 @@
  */
 
 import { App, Modal } from 'obsidian';
+import { t } from '../i18n';
 
 export class RevokeModal extends Modal {
 	private confirmed = false;
@@ -16,7 +17,7 @@ export class RevokeModal extends Modal {
 			this.resolvePromise = resolve;
 		});
 
-		this.titleEl.setText('Revoke from VanBlog');
+		this.titleEl.setText(t('revoke.title'));
 		this.build(fileName, articleTitle);
 	}
 
@@ -28,10 +29,10 @@ export class RevokeModal extends Modal {
 		const { contentEl } = this;
 
 		contentEl.createEl('p', {
-			text: `Are you sure you want to revoke "${articleTitle}" from VanBlog?`,
+			text: t('revoke.confirm') + articleTitle + t('revoke.confirmEnd'),
 		});
 		contentEl.createEl('p', {
-			text: `File: ${fileName}`,
+			text: t('revoke.fileLabel') + fileName,
 			attr: {
 				style:
 					'color: var(--text-muted); font-size: 0.85em; margin-bottom: 1rem;',
@@ -44,13 +45,13 @@ export class RevokeModal extends Modal {
 			},
 		});
 
-		btnContainer.createEl('button', { text: 'Cancel' }).onclick = () => {
+		btnContainer.createEl('button', { text: t('revoke.cancel') }).onclick = () => {
 			this.confirmed = false;
 			this.close();
 		};
 
 		const revokeBtn = btnContainer.createEl('button', {
-			text: 'Revoke',
+			text: t('revoke.revoke'),
 			attr: {
 				style:
 					'background: var(--background-modifier-error); color: var(--text-on-accent);',

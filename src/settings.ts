@@ -2,10 +2,12 @@
  * VanBlog Publisher – settings
  *
  * Connection config, test button, tag & category management (list + CRUD).
+ * Fully internationalised (中文 / English).
  */
 
-import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
+import { App, PluginSettingTab, Setting } from 'obsidian';
 import VanBlogPlugin from './main';
+import { t, useLocale, resolveLocale, type Locale } from './i18n';
 
 export interface VanBlogSettings {
 	baseUrl: string;
@@ -13,6 +15,7 @@ export interface VanBlogSettings {
 	defaultCategory: string;
 	defaultTags: string;
 	autoUploadMedia: boolean;
+	locale: Locale;
 }
 
 export const DEFAULT_SETTINGS: VanBlogSettings = {
@@ -21,6 +24,7 @@ export const DEFAULT_SETTINGS: VanBlogSettings = {
 	defaultCategory: '',
 	defaultTags: '',
 	autoUploadMedia: true,
+	locale: 'obsidian',
 };
 
 export class VanBlogSettingTab extends PluginSettingTab {
@@ -36,6 +40,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		this.renderConnectionSection(containerEl);
+		this.renderLanguageSection(containerEl);
 		this.renderTagManagementSection(containerEl);
 		this.renderCategoryManagementSection(containerEl);
 	}
@@ -43,16 +48,14 @@ export class VanBlogSettingTab extends PluginSettingTab {
 	// ──── Connection settings ───────────────────────────
 
 	private renderConnectionSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'VanBlog Connection' });
+		containerEl.createEl('h2', { text: t('settings.connection') });
 
 		new Setting(containerEl)
-			.setName('VanBlog base URL')
-			.setDesc(
-				'Your VanBlog instance URL (e.g. https://blog.yourdomain.com).',
-			)
+			.setName(t('settings.baseUrl'))
+			.setDesc(t('settings.baseUrlDesc'))
 			.addText((text) =>
 				text
-					.setPlaceholder('https://blog.example.com')
+					.setPlaceholder(t('settings.baseUrlPlaceholder'))
 					.setValue(this.plugin.settings.baseUrl)
 					.onChange(async (value) => {
 						this.plugin.settings.baseUrl = value;
@@ -61,11 +64,11 @@ export class VanBlogSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('API token')
-			.setDesc('Create a token in VanBlog admin → System Settings → Token Management.')
+			.setName(t('settings.apiToken'))
+			.setDesc(t('settings.apiTokenDesc'))
 			.addText((text) =>
 				text
-					.setPlaceholder('vanblog-token-xxx')
+					.setPlaceholder(t('settings.apiTokenPlaceholder'))
 					.setValue(this.plugin.settings.apiToken)
 					.onChange(async (value) => {
 						this.plugin.settings.apiToken = value;
@@ -73,24 +76,23 @@ export class VanBlogSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		// Test connection + refresh buttons
 		new Setting(containerEl)
-			.setName('Connection test')
-			.setDesc('Verify that the URL and token are correct, then refresh data.')
+			.setName(t('settings.connectionTest'))
+			.setDesc(t('settings.connectionTestDesc'))
 			.addButton((btn) => {
-				btn.setButtonText('Test Connection')
+				btn.setButtonText(t('settings.testBtn'))
 					.setCta()
 					.onClick(async () => {
 						btn.setDisabled(true);
-						btn.setButtonText('Testing…');
+						btn.setButtonText(t('settings.testingBtn'));
 						await this.plugin.testConnection();
 						btn.setDisabled(false);
-						btn.setButtonText('Test Connection');
+						btn.setButtonText(t('settings.testBtn'));
 					});
 				return btn;
 			})
 			.addButton((btn) => {
-				btn.setButtonText('Refresh Data')
+				btn.setButtonText(t('settings.refreshBtn'))
 					.onClick(async () => {
 						btn.setDisabled(true);
 						await this.plugin.fetchTagsAndCategories();
@@ -103,75 +105,93 @@ export class VanBlogSettingTab extends PluginSettingTab {
 		containerEl.createEl('hr');
 	}
 
+	// ──── Language ─────────────────────────────────────
+
+	private renderLanguageSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h2', { text: t('settings.language') });
+
+		new Setting(containerEl)
+			.setName(t('settings.language'))
+			.setDesc(t('settings.languageDesc'))
+			.addDropdown((dropdown) => {
+				dropdown.addOption('obsidian', t('lang.obsidian'));
+				dropdown.addOption('zh', t('lang.zh'));
+				dropdown.addOption('en', t('lang.en'));
+				dropdown.setValue(this.plugin.settings.locale);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.locale = value as Locale;
+					await this.plugin.saveSettings();
+					// Apply immediately so the UI re-renders in the chosen language
+					useLocale(resolveLocale(value as Locale, this.plugin));
+					this.display();
+				});
+			});
+
+		containerEl.createEl('hr');
+	}
+
 	// ──── Tag management ───────────────────────────────
 
 	private renderTagManagementSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Tag Management' });
+		containerEl.createEl('h2', { text: t('settings.tagManagement') });
 
 		const tags = this.plugin.availableTags;
-		const tagItems = tags.map((t) => ({ name: t }));
 
-		if (tagItems.length === 0) {
+		if (tags.length === 0) {
 			containerEl.createEl('p', {
-				text: 'No tags loaded. Use "Refresh Data" above or configure URL/token first.',
+				text: t('settings.tagEmpty'),
 				attr: { style: 'color: var(--text-muted);' },
 			});
 		} else {
 			const listEl = containerEl.createEl('div', {
 				attr: {
-					style:
-						'max-height: 200px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 0.25rem; margin-bottom: 0.5rem;',
+					style: 'max-height: 200px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 0.25rem; margin-bottom: 0.5rem;',
 				},
 			});
 
-			for (const tag of tagItems) {
+			for (const tagName of tags) {
 				const rowEl = listEl.createEl('div', {
 					attr: {
-						style:
-							'display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--background-modifier-border);',
+						style: 'display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--background-modifier-border);',
 					},
 				});
 
-				rowEl.createEl('span', { text: tag.name });
+				rowEl.createEl('span', { text: tagName });
 
 				const btnGroup = rowEl.createEl('div', {
 					attr: { style: 'display: flex; gap: 0.25rem;' },
 				});
 
-				// Rename button
 				btnGroup.createEl('button', {
-					text: 'Rename',
+					text: t('settings.rename'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem;' },
 				}).onclick = () => {
-					this.promptRename('tag', tag.name, async (newName) => {
-						const rid = this.plugin.tagIdMap[tag.name];
-							if (!rid) return;
-							await this.plugin.updateTag(rid, newName);
+					this.promptRename('tag', tagName, async (newName) => {
+						const id = this.plugin.tagIdMap[tagName];
+						if (!id) return;
+						await this.plugin.updateTag(id, newName);
 						this.display();
 					});
 				};
 
-				// Delete button
 				btnGroup.createEl('button', {
-					text: 'Delete',
-					attr: {
-						style:
-							'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);',
-					},
+					text: t('settings.delete'),
+					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);' },
 				}).onclick = () => {
-					this.confirmDelete('tag', tag.name, async () => {
-						const delTagId = this.plugin.tagIdMap[tag.name]; if (delTagId) this.plugin.deleteTag(delTagId, tag.name);
+					this.confirmDelete(t('settings.tagManagement'), tagName, async () => {
+						const id = this.plugin.tagIdMap[tagName];
+						if (!id) return;
+						await this.plugin.deleteTag(id, tagName);
 						this.display();
 					});
 				};
 			}
 		}
 
-		// Add tag button
 		new Setting(containerEl)
-			.setName('Add new tag')
+			.setName(t('settings.addTag'))
 			.addButton((btn) => {
-				btn.setButtonText('+ Add Tag')
+				btn.setButtonText(t('settings.addTagBtn'))
 					.setCta()
 					.onClick(() => {
 						this.promptCreate('tag', async (name) => {
@@ -188,70 +208,65 @@ export class VanBlogSettingTab extends PluginSettingTab {
 	// ──── Category management ──────────────────────────
 
 	private renderCategoryManagementSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Category Management' });
+		containerEl.createEl('h2', { text: t('settings.categoryManagement') });
 
 		const cats = this.plugin.availableCategories;
-		const catItems = cats.map((c) => ({ name: c }));
 
-		if (catItems.length === 0) {
+		if (cats.length === 0) {
 			containerEl.createEl('p', {
-				text: 'No categories loaded. Use "Refresh Data" above or configure URL/token first.',
+				text: t('settings.categoryEmpty'),
 				attr: { style: 'color: var(--text-muted);' },
 			});
 		} else {
 			const listEl = containerEl.createEl('div', {
 				attr: {
-					style:
-						'max-height: 200px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 0.25rem; margin-bottom: 0.5rem;',
+					style: 'max-height: 200px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 0.25rem; margin-bottom: 0.5rem;',
 				},
 			});
 
-			for (const cat of catItems) {
+			for (const catName of cats) {
 				const rowEl = listEl.createEl('div', {
 					attr: {
-						style:
-							'display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--background-modifier-border);',
+						style: 'display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--background-modifier-border);',
 					},
 				});
 
-				rowEl.createEl('span', { text: cat.name });
+				rowEl.createEl('span', { text: catName });
 
 				const btnGroup = rowEl.createEl('div', {
 					attr: { style: 'display: flex; gap: 0.25rem;' },
 				});
 
-				// Rename button
 				btnGroup.createEl('button', {
-					text: 'Rename',
+					text: t('settings.rename'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem;' },
 				}).onclick = () => {
-					this.promptRename('category', cat.name, async (newName) => {
-						const catUpdId = this.plugin.categoryIdMap[cat.name]; if (catUpdId) this.plugin.updateCategory(catUpdId, newName);
+					this.promptRename('category', catName, async (newName) => {
+						const id = this.plugin.categoryIdMap[catName];
+						if (!id) return;
+						await this.plugin.updateCategory(id, newName);
 						this.display();
 					});
 				};
 
-				// Delete button
 				btnGroup.createEl('button', {
-					text: 'Delete',
-					attr: {
-						style:
-							'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);',
-					},
+					text: t('settings.delete'),
+					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);' },
 				}).onclick = () => {
-					this.confirmDelete('category', cat.name, async () => {
-						const catDelId = this.plugin.categoryIdMap[cat.name]; if (catDelId) this.plugin.deleteCategory(catDelId, cat.name);
+					this.confirmDelete(t('settings.categoryManagement'), catName, async () => {
+						const id = this.plugin.categoryIdMap[catName];
+						if (!id) return;
+						await this.plugin.deleteCategory(id, catName);
 						this.display();
 					});
 				};
 			}
 		}
 
-		// Add category button
 		new Setting(containerEl)
-			.setName('Add new category')
+			.setName(t('settings.addCategory'))
 			.addButton((btn) => {
-				btn.setButtonText('+ Add Category')
+				btn.setButtonText(t('settings.addCategoryBtn'))
 					.setCta()
 					.onClick(() => {
 						this.promptCreate('category', async (name) => {
@@ -271,9 +286,9 @@ export class VanBlogSettingTab extends PluginSettingTab {
 		type: string,
 		onConfirm: (name: string) => Promise<void>,
 	): void {
-		const value = prompt(`Enter new ${type} name:`);
-		if (!value?.trim()) return;
-		onConfirm(value.trim());
+		const val = prompt(t('settings.renamePrompt'));
+		if (!val?.trim()) return;
+		onConfirm(val.trim());
 	}
 
 	private promptRename(
@@ -281,17 +296,18 @@ export class VanBlogSettingTab extends PluginSettingTab {
 		oldName: string,
 		onConfirm: (newName: string) => Promise<void>,
 	): void {
-		const value = prompt(`Rename "${oldName}" to:`, oldName);
-		if (!value?.trim() || value.trim() === oldName) return;
-		onConfirm(value.trim());
+		const val = prompt(t('settings.renamePrompt'), oldName);
+		if (!val?.trim() || val.trim() === oldName) return;
+		onConfirm(val.trim());
 	}
 
 	private confirmDelete(
-		type: string,
+		label: string,
 		name: string,
 		onConfirm: () => Promise<void>,
 	): void {
-		if (confirm(`Delete ${type} "${name}"? This cannot be undone.`)) {
+		const msg = `${t('settings.deleteConfirm')} ${label} "${name}"？${t('settings.undoWarning')}`;
+		if (confirm(msg)) {
 			onConfirm();
 		}
 	}
