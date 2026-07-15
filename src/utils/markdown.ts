@@ -153,6 +153,9 @@ export interface FrontMatter {
 	password?: string;
 	hide?: boolean;
 	slug?: string;
+		copyright?: string;
+	author?: string;
+	date?: string;
 }
 
 /**
@@ -219,6 +222,21 @@ export function parseFrontMatter(content: string): {
 
 			if (key === 'slug') {
 				frontmatter.slug = String(value).replace(/^['"]|['"]$/g, '');
+
+			if ((key as string) === 'copyright') {
+				frontmatter.copyright = String(value).replace(/^['"]|['"]$/g, '');
+				continue;
+			}
+				continue;
+			}
+
+			if ((key as string) === 'author') {
+				frontmatter.author = String(value).replace(/^['"]|['"]$/g, '');
+				continue;
+			}
+
+			if ((key as string) === 'date') {
+				frontmatter.date = String(value).replace(/^['"]|['"]$/g, '');
 				continue;
 			}
 		}
@@ -250,4 +268,61 @@ export function withFrontMatter(
 	}
 	lines.push('---', '');
 	return lines.join('\n') + body;
+}
+
+// ──────────────────── VanBlog file properties ────────────────────
+
+/** VanBlog metadata stored as front-matter properties in the local file. */
+export interface VanBlogFileProps {
+	'vanblog-id': string | number;
+	'vanblog-published-at': string;
+	'vanblog-url': string;
+	'vanblog-tags'?: string[];
+	'vanblog-category'?: string;
+}
+
+/**
+ * Remove all `vanblog-*` lines from the front-matter.
+ */
+export function stripVanBlogProperties(content: string): string {
+	return content
+		.replace(/^vanblog-.*$/gm, '')
+		.replace(/\n{2,}/g, '\n')
+		.trimStart();
+}
+
+/**
+ * Merge VanBlog properties into the existing front-matter.
+ * Creates front‑matter if none exists.
+ */
+export function addVanBlogProperties(
+	content: string,
+	props: VanBlogFileProps,
+): string {
+	// Remove any stale vanblog-* lines first
+	const cleaned = stripVanBlogProperties(content);
+
+	const fmMatch = /^---\n/.exec(cleaned);
+	if (fmMatch) {
+		const lines = buildPropsLines(props);
+		return cleaned.slice(0, 4) + lines + cleaned.slice(4);
+	}
+
+	// No front‑matter — create one
+	return '---\n' + buildPropsLines(props) + '---\n' + cleaned;
+}
+
+function buildPropsLines(props: VanBlogFileProps): string {
+	const lines: string[] = [];
+	for (const [key, value] of Object.entries(props)) {
+		if (value === undefined || value === null) continue;
+		if (Array.isArray(value)) {
+			if (value.length > 0) {
+				lines.push(`${key}: [${value.join(', ')}]`);
+			}
+		} else {
+			lines.push(`${key}: ${value}`);
+		}
+	}
+	return lines.length > 0 ? lines.join('\n') + '\n' : '';
 }

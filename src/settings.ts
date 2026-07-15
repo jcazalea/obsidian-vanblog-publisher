@@ -8,6 +8,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import VanBlogPlugin from './main';
 import { t, useLocale, resolveLocale, type Locale } from './i18n';
+import { InputModal, ConfirmModal } from './modals/input-modal';
 
 export interface VanBlogSettings {
 	baseUrl: string;
@@ -165,8 +166,8 @@ export class VanBlogSettingTab extends PluginSettingTab {
 				btnGroup.createEl('button', {
 					text: t('settings.rename'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem;' },
-				}).onclick = () => {
-					this.promptRename('tag', tagName, async (newName) => {
+				}).onclick = async () => {
+					await this.promptRename('tag', tagName, async (newName) => {
 						const id = this.plugin.tagIdMap[tagName];
 						if (!id) return;
 						await this.plugin.updateTag(id, newName);
@@ -177,8 +178,8 @@ export class VanBlogSettingTab extends PluginSettingTab {
 				btnGroup.createEl('button', {
 					text: t('settings.delete'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);' },
-				}).onclick = () => {
-					this.confirmDelete(t('settings.tagManagement'), tagName, async () => {
+				}).onclick = async () => {
+					await this.confirmDelete(t('settings.tagManagement'), tagName, async () => {
 						const id = this.plugin.tagIdMap[tagName];
 						if (!id) return;
 						await this.plugin.deleteTag(id, tagName);
@@ -188,19 +189,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 			}
 		}
 
-		new Setting(containerEl)
-			.setName(t('settings.addTag'))
-			.addButton((btn) => {
-				btn.setButtonText(t('settings.addTagBtn'))
-					.setCta()
-					.onClick(() => {
-						this.promptCreate('tag', async (name) => {
-							await this.plugin.createTag(name);
-							this.display();
-						});
-					});
-				return btn;
-			});
+		// (Add-tag button removed — tags are auto‑managed by VanBlog)
 
 		containerEl.createEl('hr');
 	}
@@ -240,8 +229,8 @@ export class VanBlogSettingTab extends PluginSettingTab {
 				btnGroup.createEl('button', {
 					text: t('settings.rename'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem;' },
-				}).onclick = () => {
-					this.promptRename('category', catName, async (newName) => {
+				}).onclick = async () => {
+					await this.promptRename('category', catName, async (newName) => {
 						const id = this.plugin.categoryIdMap[catName];
 						if (!id) return;
 						await this.plugin.updateCategory(id, newName);
@@ -252,8 +241,8 @@ export class VanBlogSettingTab extends PluginSettingTab {
 				btnGroup.createEl('button', {
 					text: t('settings.delete'),
 					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);' },
-				}).onclick = () => {
-					this.confirmDelete(t('settings.categoryManagement'), catName, async () => {
+				}).onclick = async () => {
+					await this.confirmDelete(t('settings.categoryManagement'), catName, async () => {
 						const id = this.plugin.categoryIdMap[catName];
 						if (!id) return;
 						await this.plugin.deleteCategory(id, catName);
@@ -263,52 +252,47 @@ export class VanBlogSettingTab extends PluginSettingTab {
 			}
 		}
 
-		new Setting(containerEl)
-			.setName(t('settings.addCategory'))
-			.addButton((btn) => {
-				btn.setButtonText(t('settings.addCategoryBtn'))
-					.setCta()
-					.onClick(() => {
-						this.promptCreate('category', async (name) => {
-							await this.plugin.createCategory(name);
-							this.display();
-						});
-					});
-				return btn;
-			});
+		// (Add-category button removed — categories are auto‑managed by VanBlog)
 
 		containerEl.createEl('hr');
 	}
 
 	// ──── Dialog helpers ───────────────────────────────
 
-	private promptCreate(
-		type: string,
+	private async promptCreate(
+		_type: string,
 		onConfirm: (name: string) => Promise<void>,
-	): void {
-		const val = prompt(t('settings.renamePrompt'));
+	): Promise<void> {
+		const modal = new InputModal(this.app, t('settings.renamePrompt'), '');
+		modal.open();
+		const val = await modal.waitForResult();
 		if (!val?.trim()) return;
-		onConfirm(val.trim());
+		await onConfirm(val.trim());
 	}
 
-	private promptRename(
-		type: string,
+	private async promptRename(
+		_type: string,
 		oldName: string,
 		onConfirm: (newName: string) => Promise<void>,
-	): void {
-		const val = prompt(t('settings.renamePrompt'), oldName);
+	): Promise<void> {
+		const modal = new InputModal(this.app, t('settings.renamePrompt'), '', oldName);
+		modal.open();
+		const val = await modal.waitForResult();
 		if (!val?.trim() || val.trim() === oldName) return;
-		onConfirm(val.trim());
+		await onConfirm(val.trim());
 	}
 
-	private confirmDelete(
+	private async confirmDelete(
 		label: string,
 		name: string,
 		onConfirm: () => Promise<void>,
-	): void {
+	): Promise<void> {
 		const msg = `${t('settings.deleteConfirm')} ${label} "${name}"？${t('settings.undoWarning')}`;
-		if (confirm(msg)) {
-			onConfirm();
+		const modal = new ConfirmModal(this.app, msg);
+		modal.open();
+		const confirmed = await modal.waitForResult();
+		if (confirmed) {
+			await onConfirm();
 		}
 	}
 }

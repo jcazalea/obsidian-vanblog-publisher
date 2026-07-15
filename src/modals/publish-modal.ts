@@ -31,6 +31,10 @@ export class PublishModal extends Modal {
 	) {
 		super(app);
 		this.payload = { ...initialPayload };
+		// Auto‑generate a random slug if none was provided
+		if (!this.payload.pathname) {
+			this.payload.pathname = generateSlug();
+		}
 		this.availableTags = availableTags;
 		this.availableCategories = availableCategories;
 
@@ -87,46 +91,108 @@ export class PublishModal extends Modal {
 				});
 			});
 
-		// ── Tags (dropdown + text) ──
-		// We keep a text input showing the tags and a dropdown to add suggestions.
-		let tagInputRef: import('obsidian').TextComponent | null = null;
-		const tagSetting = new Setting(contentEl)
-			.setName(t('publish.tags'))
-			.setDesc(t('publish.tagsDesc'));
-
-		tagSetting.addText((text) => {
-			tagInputRef = text;
-			text
-				.setPlaceholder(t('publish.tagsPlaceholder'))
-				.setValue((this.payload.tags ?? []).join(', '))
-				.onChange((value) => {
-					this.payload.tags = value
-						.split(',')
-						.map((t) => t.trim())
-						.filter(Boolean);
-				});
-		});
-
-		// Dropdown for adding a tag from the suggestion list
-		tagSetting.addDropdown((dropdown) => {
-			dropdown.addOption('', t('publish.addTag'));
-			for (const t of this.availableTags) {
-				if (t) dropdown.addOption(t, t);
-			}
-			dropdown.onChange((value) => {
-				if (!value) return;
-				// Append to existing tags
-				const current = new Set(
-					(this.payload.tags ?? []).map((t) => t.toLowerCase()),
-				);
-				if (!current.has(value.toLowerCase())) {
-					const updated = [...(this.payload.tags ?? []), value];
-					this.payload.tags = updated;
-					if (tagInputRef) tagInputRef.setValue(updated.join(', '));
-				}
-				dropdown.setValue(''); // Reset to placeholder
+			// ---- Tags section --------------------------------------------------
+			const tagsContainer = contentEl.createDiv({
+				attr: { style: 'margin-bottom: 0.75rem;' },
 			});
-		});
+			tagsContainer.createEl('h3', {
+				text: t('publish.tags'),
+				attr: { style: 'margin: 0 0 0.25rem 0; font-size: 0.9em;' },
+			});
+
+			// Row: text input + Add button
+			const inputRow = tagsContainer.createDiv({
+				attr: { style: 'display: flex; gap: 0.25rem; margin-bottom: 0.25rem;' },
+			});
+			const tagInput = inputRow.createEl('input', {
+				type: 'text',
+				attr: { placeholder: t('publish.tagsPlaceholder'), style: 'flex: 1;' },
+			});
+			const addBtn = inputRow.createEl('button', {
+				text: t('publish.addBtn'),
+				attr: { style: 'padding: 0 0.6rem;' },
+			});
+
+			// Row: dropdown + Add from suggestions
+			const dropdownRow = tagsContainer.createDiv({
+				attr: { style: 'display: flex; gap: 0.25rem; margin-bottom: 0.5rem;' },
+			});
+			const tagSelect = dropdownRow.createEl('select', {
+				attr: { style: 'flex: 1;' },
+			});
+			tagSelect.createEl('option', { value: '', text: t('publish.addTag') });
+			for (const tag of this.availableTags) {
+				if (tag) tagSelect.createEl('option', { value: tag, text: tag });
+			}
+			const suggestBtn = dropdownRow.createEl('button', {
+				text: t('publish.addBtn'),
+				attr: { style: 'padding: 0 0.6rem;' },
+			});
+
+			// Tag list display
+			const tagListEl = tagsContainer.createEl('div', {
+				attr: { style: 'display: flex; flex-wrap: wrap; gap: 0.3rem; min-height: 1.8rem; border: 1px solid var(--background-modifier-border); border-radius: 4px; padding: 0.3rem;' },
+			});
+
+			const renderTags = () => {
+				tagListEl.empty();
+				const tags = this.payload.tags ?? [];
+				if (tags.length === 0) {
+					tagListEl.createEl('span', {
+						text: t('publish.noTags'),
+						attr: { style: 'color: var(--text-muted); font-size: 0.85em; padding: 0.15rem 0.3rem;' },
+					});
+					return;
+				}
+				for (let i = 0; i < tags.length; i++) {
+					const tag = tags[i];
+					const chip = tagListEl.createEl('span', {
+						attr: { style: 'display: inline-flex; align-items: center; gap: 0.2rem; background: var(--background-modifier-hover); border-radius: 3px; padding: 0.1rem 0.3rem; font-size: 0.85em;' },
+					});
+					chip.createEl('span', { text: tag });
+					const removeBtn = chip.createEl('span', {
+						text: '×',
+						attr: { style: 'cursor: pointer; font-weight: bold; color: var(--text-error); padding: 0 0.1rem; font-size: 1.1em; line-height: 1;', title: t('publish.removeTag') },
+					});
+					const idx = i;
+					removeBtn.onclick = () => {
+						const updated = [...(this.payload.tags ?? [])];
+						updated.splice(idx, 1);
+						this.payload.tags = updated;
+						renderTags();
+					};
+				}
+			};
+
+			renderTags();
+
+			// Add from text input
+			addBtn.onclick = () => {
+				const val = tagInput.value.trim();
+				if (!val) return;
+				const current = (this.payload.tags ?? []).map((t) => t.toLowerCase());
+				if (!current.includes(val.toLowerCase())) {
+					this.payload.tags = [...(this.payload.tags ?? []), val];
+					renderTags();
+				}
+				tagInput.value = '';
+			};
+			tagInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') addBtn.click();
+			});
+
+			// Add from dropdown
+			suggestBtn.onclick = () => {
+				const val = tagSelect.value;
+				if (!val) return;
+				const current = (this.payload.tags ?? []).map((t) => t.toLowerCase());
+				if (!current.includes(val.toLowerCase())) {
+					this.payload.tags = [...(this.payload.tags ?? []), val];
+					renderTags();
+				}
+				tagSelect.value = '';
+			};
+
 
 		// ── Slug ──
 		new Setting(contentEl)
@@ -135,9 +201,9 @@ export class PublishModal extends Modal {
 			.addText((text) =>
 				text
 					.setPlaceholder(t('publish.slugPlaceholder'))
-					.setValue(this.payload.slug ?? '')
+					.setValue(this.payload.pathname ?? '')
 					.onChange((value) => {
-						this.payload.slug = value || undefined;
+						this.payload.pathname = value || undefined;
 					}),
 			);
 
@@ -171,8 +237,8 @@ export class PublishModal extends Modal {
 		new Setting(contentEl)
 			.setName(t('publish.hide'))
 			.addToggle((toggle) =>
-				toggle.setValue(this.payload.hide ?? false).onChange((value) => {
-					this.payload.hide = value;
+				toggle.setValue(this.payload.hidden ?? false).onChange((value) => {
+					this.payload.hidden = value;
 				}),
 			);
 
@@ -211,4 +277,24 @@ export class PublishModal extends Modal {
 		this.contentEl.empty();
 		this.resolvePromise(this.result);
 	}
+}
+
+/**
+ * Generate a practically unique slug for VanBlog URLs.
+ *
+ * Format:  `{timestamp}-{random}`
+ *   - timestamp : 9‑char base‑36 milliseconds → unique across time
+ *   - random    : 8‑char hex (32 bits) → unique within the same ms
+ *
+ * Combined space: > 2⁵⁶, collision probability is negligible for personal use.
+ */
+function generateSlug(): string {
+	const ts = Date.now().toString(36); // base‑36 timestamp
+	const bytes = new Uint8Array(4);
+	crypto.getRandomValues(bytes);
+	let rand = '';
+	for (const b of bytes) {
+		rand += b.toString(16).padStart(2, '0');
+	}
+	return `${ts}-${rand}`;
 }

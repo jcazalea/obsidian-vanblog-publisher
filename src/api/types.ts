@@ -15,18 +15,24 @@ export interface ArticlePayload {
 	title: string;
 	content: string;
 	tags?: string[];
-	category?: string;
 	/** Pin priority. 0 or omitted = not pinned. Higher = higher display */
 	top?: number;
-	/** Password-protect the article (optional) */
-	password?: string;
+	category?: string;
 	/** Hide from front‑end listing */
-	hide?: boolean;
-	/** ISO date string for the article date */
-	date?: string;
+	hidden?: boolean;
+	/** Whether the article is encrypted */
+	private?: boolean;
+	/** Encryption password (only valid when private is true) */
+	password?: string;
+	/** ISO date string – modification time */
+	updatedAt?: string;
+	/** ISO date string – creation time */
+	createdAt?: string;
 	author?: string;
-	/** Optional URL slug override */
-	slug?: string;
+	/** Copyright notice / statement */
+	copyright?: string;
+	/** URL slug / pathname */
+	pathname?: string;
 }
 
 /** Response returned by the VanBlog article endpoints */
@@ -37,10 +43,14 @@ export interface ArticleResponse {
 	tags: string[];
 	category: string;
 	top: number;
-	hide: boolean;
-	date: string;
+	hidden: boolean;
+	private: boolean;
+	password?: string;
 	author: string;
-	slug: string;
+	/** Copyright notice / statement */
+	copyright: string;
+	/** URL slug / pathname */
+	pathname: string;
 	createdAt: string;
 	updatedAt: string;
 }

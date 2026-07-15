@@ -27,6 +27,9 @@ import {
 	findEmbeddedFiles,
 	applyReplacements,
 	parseFrontMatter,
+	stripVanBlogProperties,
+	addVanBlogProperties,
+	type VanBlogFileProps,
 } from './utils/markdown';
 import { PublishModal } from './modals/publish-modal';
 import { RevokeModal } from './modals/revoke-modal';
@@ -200,22 +203,14 @@ export default class VanBlogPlugin extends Plugin {
 			]);
 
 			if (tags && tags.length > 0) {
-				this.availableTags = tags
-					.map((t) => t.name)
-					.filter(Boolean)
-					.sort();
-				tags.forEach((t) => {
-					if (t.name) this.tagIdMap[t.name] = t.id;
-				});
+				this.availableTags = [
+					...new Set(tags.filter(Boolean).sort()),
+				];
 			}
 			if (cats && cats.length > 0) {
-				this.availableCategories = cats
-					.map((c) => c.name)
-					.filter(Boolean)
-					.sort();
-				cats.forEach((c) => {
-					if (c.name) this.categoryIdMap[c.name] = c.id;
-				});
+				this.availableCategories = [
+					...new Set(cats.filter(Boolean).sort()),
+				];
 			}
 
 			await this.saveSettings();
@@ -325,6 +320,7 @@ export default class VanBlogPlugin extends Plugin {
 			frontmatter.title ?? file.basename;
 
 		// 3. Gather article payload from front‑matter + settings
+		const now = new Date().toISOString();
 		const payload: ArticlePayload = {
 			title,
 			content: body,
@@ -336,9 +332,14 @@ export default class VanBlogPlugin extends Plugin {
 						: undefined,
 			category: frontmatter.category || this.settings.defaultCategory || undefined,
 			top: frontmatter.top,
-			password: frontmatter.password,
-			hide: frontmatter.hide,
-			slug: frontmatter.slug,
+			hidden: frontmatter.hide,
+			private: frontmatter.password ? true : undefined,
+			password: frontmatter.password || undefined,
+			pathname: frontmatter.slug,
+			copyright: frontmatter.copyright,
+			author: frontmatter.author,
+			createdAt: frontmatter.date || now,
+			updatedAt: now,
 		};
 
 		// 4. Handle embedded media if the setting is on
@@ -394,13 +395,15 @@ export default class VanBlogPlugin extends Plugin {
 
 		if (existing?.isPublished && existing.articleId) {
 			// Update
-			await this.api.updateArticle(existing.articleId, finalPayload);
+			const updatedRes = await this.api.updateArticle(existing.articleId, finalPayload);
 			articleId = existing.articleId;
+			await this.writeVanBlogProps(file, articleId, finalPayload, updatedRes.pathname);
 			new Notice(t('publish.updated') + finalPayload.title + t('publish.updatedEnd'));
 		} else {
 			// Create
 			const created = await this.api.createArticle(finalPayload);
 			articleId = created.id;
+			await this.writeVanBlogProps(file, articleId, finalPayload, created.pathname);
 			new Notice(t('publish.published') + finalPayload.title + t('publish.publishedEnd'));
 		}
 
@@ -483,6 +486,37 @@ export default class VanBlogPlugin extends Plugin {
 	}
 
 	// ──── Utilities ────────────────────────────────────────
+
+	// ---- Write VanBlog properties to file -------------------------------
+
+	private async writeVanBlogProps(
+		file: TFile,
+		articleId: string | number,
+		payload: ArticlePayload,
+		pathname: string,
+	): Promise<void> {
+		try {
+			const baseUrl = this.settings.baseUrl.replace(/\/+$/, '');
+			const url = pathname ? `${baseUrl}/article/${pathname}` : baseUrl;
+			const props: VanBlogFileProps = {
+				'vanblog-id': articleId,
+				'vanblog-published-at': new Date().toISOString(),
+				'vanblog-url': url,
+			};
+			if (payload.tags && payload.tags.length > 0) {
+				props['vanblog-tags'] = payload.tags;
+			}
+			if (payload.category) {
+				props['vanblog-category'] = payload.category;
+			}
+
+			const currentContent = await this.app.vault.read(file);
+			const newContent = addVanBlogProperties(currentContent, props);
+			await this.app.vault.modify(file, newContent);
+		} catch (err) {
+			console.error('[VanBlog] Failed to write properties:', err);
+		}
+	}
 
 	private getMimeType(ext: string): string {
 		const map: Record<string, string> = {

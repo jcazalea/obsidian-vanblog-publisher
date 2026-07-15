@@ -6,11 +6,11 @@
  *
  * Endpoint conventions (VanBlog / NestJS Swagger):
  *   ───────────────────────────────────────────────────────
- *   POST   /api/article                       create article
- *   PUT    /api/article/:id                   update article
- *   DELETE /api/article/:id                   delete article
- *   GET    /api/article/:id                   get single article
- *   GET    /api/article                       list articles
+ *   POST   /api/admin/article                       create article
+ *   PUT    /api/admin/article/:id                   update article
+ *   DELETE /api/admin/article/:id                   delete article
+ *   GET    /api/admin/article/:id                   get single article
+ *   GET    /api/admin/article                       list articles
  *   POST   /api/upload                        upload file (multipart)
  *   GET    /api/admin/tag/all   list tags
  *   GET    /api/admin/category/all  list categories
@@ -93,7 +93,7 @@ export class VanBlogApiClient {
 	// ──── Articles ─────────────────────────────────────────
 
 	async createArticle(payload: ArticlePayload): Promise<ArticleResponse> {
-		return this.request<ArticleResponse>('/api/article', {
+		return this.request<ArticleResponse>('/api/admin/article', {
 			method: 'POST',
 			body: JSON.stringify(payload),
 		});
@@ -103,20 +103,20 @@ export class VanBlogApiClient {
 		id: string | number,
 		payload: Partial<ArticlePayload>,
 	): Promise<ArticleResponse> {
-		return this.request<ArticleResponse>(`/api/article/${id}`, {
+		return this.request<ArticleResponse>(`/api/admin/article/${id}`, {
 			method: 'PUT',
 			body: JSON.stringify(payload),
 		});
 	}
 
 	async deleteArticle(id: string | number): Promise<void> {
-		await this.request<unknown>(`/api/article/${id}`, {
+		await this.request<unknown>(`/api/admin/article/${id}`, {
 			method: 'DELETE',
 		});
 	}
 
 	async getArticle(id: string | number): Promise<ArticleResponse> {
-		return this.request<ArticleResponse>(`/api/article/${id}`, {
+		return this.request<ArticleResponse>(`/api/admin/article/${id}`, {
 			method: 'GET',
 		});
 	}
@@ -126,23 +126,23 @@ export class VanBlogApiClient {
 		pageSize = 10,
 	): Promise<ArticleListResponse> {
 		return this.request<ArticleListResponse>(
-			`/api/article?page=${page}&pageSize=${pageSize}`,
+			`/api/admin/article?page=${page}&pageSize=${pageSize}`,
 			{ method: 'GET' },
 		);
 	}
 
 	// ──── Tags & Categories ──────────────────────────────
 
-	async getTags(): Promise<TagItem[]> {
-		return this.request<TagItem[]>(
-			'/api/admin/tag/all?detail=true',
+	async getTags(): Promise<string[]> {
+		return this.request<string[]>(
+			'/api/admin/tag/all',
 			{ method: 'GET' },
 		);
 	}
 
-	async getCategories(): Promise<CategoryItem[]> {
-		return this.request<CategoryItem[]>(
-			'/api/admin/category/all?detail=true',
+	async getCategories(): Promise<string[]> {
+		return this.request<string[]>(
+			'/api/admin/category/all',
 			{ method: 'GET' },
 		);
 	}
@@ -150,7 +150,7 @@ export class VanBlogApiClient {
 		/** Create a new tag. */
 		async createTag(name: string): Promise<TagItem> {
 			return this.request<TagItem>('/api/admin/tag', {
-				method: 'POST',
+				method: 'PUT',
 				body: JSON.stringify({ name }),
 			});
 		}
