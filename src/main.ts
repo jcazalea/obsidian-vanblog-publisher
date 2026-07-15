@@ -114,12 +114,21 @@ export default class VanBlogPlugin extends Plugin {
 	// ──── Settings ─────────────────────────────────────────
 
 	async loadSettings(): Promise<void> {
-		const saved = (await this.loadData()) as Partial<VanBlogSettings>;
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved) as VanBlogSettings;
+		const data = ((await this.loadData()) as Record<string, unknown>) ?? {};
+		const saved = data.settings as Partial<VanBlogSettings> | undefined;
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			saved,
+		) as VanBlogSettings;
 	}
 
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		const data: Record<string, unknown> = {
+			settings: this.settings,
+			articles: this.pluginData.articles,
+		};
+		await this.saveData(data);
 		// Keep the API client in sync
 		if (this.api) {
 			this.api.setCredentials(this.settings.baseUrl, this.settings.apiToken);
@@ -127,19 +136,22 @@ export default class VanBlogPlugin extends Plugin {
 	}
 
 	private async loadPluginData(): Promise<void> {
-		const raw = (await this.loadData()) as Record<string, unknown> | null;
-		const stored = raw?.articles;
+		const data =
+			((await this.loadData()) as Record<string, unknown>) ?? {};
+		const stored = data.articles;
 		if (stored && typeof stored === 'object') {
-			this.pluginData = { articles: stored as Record<string, ArticleRecord> };
+			this.pluginData = {
+				articles: stored as Record<string, ArticleRecord>,
+			};
 		}
 	}
 
 	private async savePluginData(): Promise<void> {
-		// Merge articles into the settings object so both live under loadData
-		const existing =
-			((await this.loadData()) as Record<string, unknown>) ?? {};
-		existing.articles = this.pluginData.articles;
-		await this.saveData(existing);
+		const data: Record<string, unknown> = {
+			settings: this.settings,
+			articles: this.pluginData.articles,
+		};
+		await this.saveData(data);
 	}
 
 	// ──── Publish flow ─────────────────────────────────────

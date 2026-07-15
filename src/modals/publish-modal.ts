@@ -4,7 +4,7 @@
  */
 
 import { App, Modal, Setting } from 'obsidian';
-import type { ArticlePayload } from './api/types';
+import type { ArticlePayload } from '../api/types';
 
 export interface PublishResult {
 	confirmed: boolean;

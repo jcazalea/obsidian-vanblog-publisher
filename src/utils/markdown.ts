@@ -7,7 +7,6 @@
  *   - Extracting front‑matter (title, tags, category).
  */
 
-import { type TFile, type Vault } from 'obsidian';
 
 // ──────────────────── Embedded file detection ────────────────────
 
@@ -89,24 +88,24 @@ export function findEmbeddedFiles(content: string, sourceDir: string): EmbeddedF
 	// Wiki-style image embeds: ![[file.png]]
 	let match: RegExpExecArray | null;
 	while ((match = WIKI_IMAGE_RE.exec(content)) !== null) {
-		addRef(match[0], match[1]);
+		addRef(match[0], match[1]!);
 	}
 
 	// Wiki-style link embeds: [[file.pdf]]
 	while ((match = WIKI_LINK_RE.exec(content)) !== null) {
-		if (!isMediaFile(match[1])) continue;
-		addRef(match[0], match[1]);
+		if (!isMediaFile(match[1]!)) continue;
+		addRef(match[0], match[1]!);
 	}
 
 	// Markdown images: ![alt](path)
 	while ((match = MD_IMAGE_RE.exec(content)) !== null) {
-		addRef(match[0], match[2]);
+		addRef(match[0], match[2]!);
 	}
 
 	// Markdown links: [text](path)
 	while ((match = MD_LINK_RE.exec(content)) !== null) {
-		if (!isMediaFile(match[2])) continue;
-		addRef(match[0], match[2]);
+		if (!isMediaFile(match[2]!)) continue;
+		addRef(match[0], match[2]!);
 	}
 
 	return refs;
@@ -169,7 +168,7 @@ export function parseFrontMatter(content: string): {
 
 	const fmMatch = /^---\n([\s\S]*?)\n---\n/.exec(content);
 	if (fmMatch) {
-		const raw = fmMatch[1];
+		const raw = fmMatch[1] ?? '';
 		body = content.slice(fmMatch[0].length);
 
 		// Simple line‑by‑line YAML parsing for known fields
@@ -179,12 +178,12 @@ export function parseFrontMatter(content: string): {
 			if (colonIdx === -1) continue;
 
 			const key = line.slice(0, colonIdx).trim();
-			let value: unknown = line.slice(colonIdx + 1).trim();
+			const value: string = line.slice(colonIdx + 1).trim();
 
 			if (key === 'tags') {
 				// tags: [tag1, tag2] or tags: tag1, tag2
 				const tagMatch = value.match(/^\[(.*)\]$/);
-				if (tagMatch) {
+				if (tagMatch && tagMatch[1]) {
 					frontmatter.tags = tagMatch[1].split(',').map((t) => t.trim().replace(/['"]/g, '')).filter(Boolean);
 				} else if (typeof value === 'string' && value) {
 					frontmatter.tags = value.split(',').map((t) => t.trim().replace(/['"]/g, '')).filter(Boolean);

@@ -1,8 +1,8 @@
 {
-	"name": "az-mind-map",
+	"name": "obsidian-vanblog-publisher",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
-	"main": "main.js",
+	"description": "Publish and manage documents on your VanBlog blog system directly from Obsidian.",
+	"main": "dist/main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

@@ -1,8 +1,40 @@
 /*
+ * VanBlog Publisher – Modal and UI styles
+ */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* ──── Publish Modal ──────────────────────────────────────── */
 
-If your plugin does not need CSS, delete this file.
+.vanblog-publish-modal .setting-item {
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding: 0.75rem 0;
+}
 
-*/
+.vanblog-publish-modal .setting-item:last-child {
+	border-bottom: none;
+}
+
+.vanblog-publish-modal .modal-footer {
+	display: flex;
+	gap: 0.5rem;
+	justify-content: flex-end;
+	margin-top: 1rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+/* ──── Revoke Modal ───────────────────────────────────────── */
+
+.vanblog-revoke-modal .modal-warning {
+	color: var(--text-error);
+	font-weight: var(--font-semibold);
+}
+
+/* ──── Status indicators ──────────────────────────────────── */
+
+.vanblog-status-published {
+	color: var(--color-green);
+}
+
+.vanblog-status-unpublished {
+	color: var(--text-muted);
+}
