@@ -257,7 +257,6 @@ export class VanBlogApiClient {
 				[VANBLOG_AUTH_HEADER]: this.token,
 			},
 		});
-		console.log("res", res);
 		return this.parseResponse<T>(res);
 	}
 
