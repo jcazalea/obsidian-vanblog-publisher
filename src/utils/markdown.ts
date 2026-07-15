@@ -16,6 +16,8 @@ export interface EmbeddedFileRef {
 	 *   `![[image.png]]` or `[asset](file:///path/to/file.pdf)`
 	 */
 	fullMatch: string;
+	/** The raw link text as written in the markdown (e.g. "image.png" or "folder/image.png") */
+	rawPath: string;
 	/** The resolved file path inside the vault */
 	filePath: string;
 	/** File name (basename) */
@@ -80,6 +82,7 @@ export function findEmbeddedFiles(content: string, sourceDir: string): EmbeddedF
 
 		refs.push({
 			fullMatch,
+			rawPath: decoded,
 			filePath: resolved,
 			fileName: decoded.split('/').pop() ?? decoded,
 		});
@@ -114,26 +117,63 @@ export function findEmbeddedFiles(content: string, sourceDir: string): EmbeddedF
 // ──────────────────── URL replacement ────────────────────
 
 export interface Replacement {
+	/** The full match string (e.g. `![[image.png]]` or `![alt](./path)`) */
 	fullMatch: string;
+	/** The raw path portion inside the match (e.g. `image.png` or `./path`) */
+	rawPath: string;
+	/** The remote URL to replace the raw path with */
 	remoteUrl: string;
 }
 
 /**
  * Apply all replacements to the source content.
  *
+ * Wiki-style embeds are converted to standard markdown format:
+ *   `![[image.png]]`        → `![image](https://remote.url/img.png)`
+ *   `![[image.png|alt]]`    → `![alt](https://remote.url/img.png)`
+ *   `[[file.pdf]]`          → `[file](https://remote.url/file.pdf)`
+ *
+ * Standard markdown links keep their format:
+ *   `![alt](./image.png)`   → `![alt](https://remote.url/img.png)`
+ *
  * @param content   Original markdown text
- * @param replacements List of { fullMatch, remoteUrl } pairs
- * @returns Content with every `fullMatch` replaced by `remoteUrl`
+ * @param replacements List of { fullMatch, rawPath, remoteUrl } triples
+ * @returns Content with replacements applied
  */
 export function applyReplacements(
 	content: string,
 	replacements: Replacement[],
 ): string {
 	let result = content;
-	for (const { fullMatch, remoteUrl } of replacements) {
-		// Escape special regex chars in the match string
+	for (const { fullMatch, rawPath, remoteUrl } of replacements) {
 		const escaped = fullMatch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		result = result.replace(new RegExp(escaped, 'g'), remoteUrl);
+
+		result = result.replace(new RegExp(escaped, 'g'), () => {
+			// Wiki-style image: ![[path]] or ![[path|alt]]
+			const wikiImgMatch = fullMatch.match(/^!\[\[([^\]|]+)(?:\|([^\]]*))?\]\]$/);
+			if (wikiImgMatch) {
+				const alt = wikiImgMatch[2]?.trim()
+					|| wikiImgMatch[1]!.replace(/\.[^.]+$/, '').split('/').pop()
+					|| 'image';
+				return `![${alt}](${remoteUrl})`;
+			}
+
+			// Wiki-style link: [[path]]
+			const wikiLinkMatch = fullMatch.match(/^\[\[([^\]|]+)(?:\|([^\]]*))?\]\]$/);
+			if (wikiLinkMatch) {
+				const text = wikiLinkMatch[2]?.trim()
+					|| wikiLinkMatch[1]!.replace(/\.[^.]+$/, '').split('/').pop()
+					|| 'file';
+				return `[${text}](${remoteUrl})`;
+			}
+
+			// Standard markdown: replace path inside the match
+			const idx = fullMatch.indexOf(rawPath);
+			if (idx === -1) return remoteUrl;
+			const prefix = fullMatch.slice(0, idx);
+			const suffix = fullMatch.slice(idx + rawPath.length);
+			return prefix + remoteUrl + suffix;
+		});
 	}
 	return result;
 }

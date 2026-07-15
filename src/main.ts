@@ -346,12 +346,13 @@ export default class VanBlogPlugin extends Plugin {
 			if (embeddedRefs.length > 0) {
 				new Notice(t('publish.uploading', { count: embeddedRefs.length }));
 
-				const replacements: { fullMatch: string; remoteUrl: string }[] = [];
+				const replacements: { fullMatch: string; rawPath: string; remoteUrl: string }[] = [];
 				for (const ref of embeddedRefs) {
 					try {
-						const remoteUrl = await this.uploadEmbeddedFile(file, ref.filePath);
+						const remoteUrl = await this.uploadEmbeddedFile(file, ref.rawPath);
 						replacements.push({
 							fullMatch: ref.fullMatch,
+							rawPath: ref.rawPath,
 							remoteUrl,
 						});
 					} catch (err) {
@@ -379,7 +380,6 @@ export default class VanBlogPlugin extends Plugin {
 		);
 		modal.open();
 		const result = await modal.waitForResult();
-
 		if (!result.confirmed) {
 			new Notice(t('publish.cancelled'));
 			return;
@@ -452,31 +452,44 @@ export default class VanBlogPlugin extends Plugin {
 	 * Upload a single embedded file (image / attachment) to VanBlog.
 	 *
 	 * @param sourceFile The markdown file that references the embedded file
-	 * @param embeddedFilePath The (possibly relative) path from the markdown
+	 * @param linkText The raw link text from the markdown (e.g. "image.png" or "folder/image.png")
 	 * @returns The remote URL returned by VanBlog
 	 */
 	private async uploadEmbeddedFile(
 		sourceFile: TFile,
-		embeddedFilePath: string,
+		linkText: string,
 	): Promise<string> {
-		// Resolve the embedded file relative to the vault
-		const resolvedPath = normalizePath(embeddedFilePath);
-		const targetFile = this.app.vault.getAbstractFileByPath(resolvedPath);
+		// Convert relative paths (./ ../) to absolute vault paths
+		let resolvedLink = linkText;
+		if (linkText.startsWith('./') || linkText.startsWith('../')) {
+			const sourceDir = sourceFile.parent?.path ?? '';
+			const vaultPath = (this.app.vault.adapter as { basePath?: string }).basePath ?? '';
+			const absPath = linkText.startsWith('./')
+				? `${sourceDir}/${linkText.slice(2)}`
+				: this.resolveRelativePath(sourceDir, linkText);
+			resolvedLink = normalizePath(`${vaultPath}/${absPath}`);
+		}
+
+		// Use Obsidian's metadataCache.getFirstLinkpathDest to resolve the link
+		// (handles attachment folders, subfolders, etc.)
+		const targetFile = this.app.metadataCache.getFirstLinkpathDest(resolvedLink, sourceFile.path);
 
 		if (!(targetFile instanceof TFile)) {
-			throw new Error(`File not found in vault: ${resolvedPath}`);
+			throw new Error(`Could not resolve link "${linkText}" from "${sourceFile.path}"`);
 		}
 
 		// Read file as ArrayBuffer
 		const buffer = await this.app.vault.readBinary(targetFile);
 		const mimeType = this.getMimeType(targetFile.extension);
+		// Generate a random 16-char filename to avoid encoding issues with non-ASCII names
+		const randomName = this.generateRandomName(16) + '.' + targetFile.extension;
 		const result = await this.api.uploadFile(
-			targetFile.name,
+			randomName,
 			buffer,
 			mimeType,
 		);
 
-		return result.url;
+		return result.src;
 	}
 
 	// ──── Published documents management ──────────────────
@@ -526,6 +539,33 @@ export default class VanBlogPlugin extends Plugin {
 	}
 
 	// ──── Utilities ────────────────────────────────────────
+
+	/**
+	 * Resolve a relative path (with ../) against a base directory.
+	 * e.g. ("folder/sub", "../image.png") → "folder/image.png"
+	 */
+	private resolveRelativePath(baseDir: string, relativePath: string): string {
+		const baseParts = baseDir ? baseDir.split('/') : [];
+		const relParts = relativePath.split('/');
+		for (const part of relParts) {
+			if (part === '..') {
+				baseParts.pop();
+			} else if (part !== '.' && part !== '') {
+				baseParts.push(part);
+			}
+		}
+		return baseParts.join('/');
+	}
+
+	/**
+	 * Generate a random alphanumeric string of the given length.
+	 */
+	private generateRandomName(length: number): string {
+		const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+		const bytes = new Uint8Array(length);
+		crypto.getRandomValues(bytes);
+		return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+	}
 
 	// ---- Write VanBlog properties to file -------------------------------
 

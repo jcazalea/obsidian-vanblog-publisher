@@ -108,7 +108,7 @@ export interface CategoryListResponse {
 /** Response from a file‑upload endpoint */
 export interface UploadResponse {
 	/** Public URL of the uploaded file */
-	url: string;
+	src: string;
 	/** File id on the server (if returned) */
 	id?: string | number;
 	/** File name */

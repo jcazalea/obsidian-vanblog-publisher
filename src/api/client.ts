@@ -53,9 +53,17 @@ function buildMultipartBody(
 	boundary: string,
 ): { body: ArrayBuffer; contentType: string } {
 	const encoder = new TextEncoder();
+
+	// Use RFC 5987 encoding for non-ASCII filenames
+	const hasNonAscii = /[^\x20-\x7E]/.test(fileName);
+	const safeFileName = fileName.replace(/"/g, '\\"');
+	const filenameParam = hasNonAscii
+		? `filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+		: `filename="${safeFileName}"`;
+
 	const header = encoder.encode(
 		`--${boundary}\r\n`
-		+ `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`
+		+ `Content-Disposition: form-data; name="file"; ${filenameParam}\r\n`
 		+ `Content-Type: ${mimeType}\r\n\r\n`,
 	);
 	const footer = encoder.encode(`\r\n--${boundary}--\r\n`);
@@ -224,7 +232,7 @@ export class VanBlogApiClient {
 			boundary,
 		);
 
-		const url = `${this.baseUrl}/api/upload`;
+		const url = `${this.baseUrl}/api/admin/img/upload`;
 		const res = await requestUrl({
 			url,
 			method: 'POST',
