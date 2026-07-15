@@ -1,20 +1,17 @@
 /**
  * VanBlog Publisher – settings
+ *
+ * Connection config, test button, tag & category management (list + CRUD).
  */
 
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import VanBlogPlugin from './main';
 
 export interface VanBlogSettings {
-	/** VanBlog base URL (e.g. https://blog.example.com) */
 	baseUrl: string;
-	/** API token created in VanBlog admin → System → Token Management */
 	apiToken: string;
-	/** Default category assigned when the article has no `category` front‑matter */
 	defaultCategory: string;
-	/** Default tags applied on publish (comma‑separated) */
 	defaultTags: string;
-	/** Whether to automatically upload embedded files before publishing */
 	autoUploadMedia: boolean;
 }
 
@@ -38,13 +35,20 @@ export class VanBlogSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		this.renderConnectionSection(containerEl);
+		this.renderTagManagementSection(containerEl);
+		this.renderCategoryManagementSection(containerEl);
+	}
+
+	// ──── Connection settings ───────────────────────────
+
+	private renderConnectionSection(containerEl: HTMLElement): void {
 		containerEl.createEl('h2', { text: 'VanBlog Connection' });
 
 		new Setting(containerEl)
 			.setName('VanBlog base URL')
 			.setDesc(
-				'Your VanBlog instance URL (e.g. https://blog.yourdomain.com). '
-					+ 'Must be accessible from this machine.',
+				'Your VanBlog instance URL (e.g. https://blog.yourdomain.com).',
 			)
 			.addText((text) =>
 				text
@@ -58,9 +62,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('API token')
-			.setDesc(
-				'Create a token in VanBlog admin → System Settings → Token Management.',
-			)
+			.setDesc('Create a token in VanBlog admin → System Settings → Token Management.')
 			.addText((text) =>
 				text
 					.setPlaceholder('vanblog-token-xxx')
@@ -71,59 +73,226 @@ export class VanBlogSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		containerEl.createEl('h2', { text: 'Default publish options' });
-
+		// Test connection + refresh buttons
 		new Setting(containerEl)
-			.setName('Default category')
-			.setDesc(
-				'Category assigned when the markdown file has no `category` front‑matter. '
-					+ 'Leave empty to skip setting a category.',
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder('Tech')
-					.setValue(this.plugin.settings.defaultCategory)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultCategory = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Default tags')
-			.setDesc(
-				'Comma‑separated tags used when the file has no `tags` front‑matter.',
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder('obsidian, blog')
-					.setValue(this.plugin.settings.defaultTags)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultTags = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Auto‑upload embedded media')
-			.setDesc(
-				'Upload images / attachments referenced in the markdown file to '
-					+ 'VanBlog before publishing, and replace local paths with remote URLs.',
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.autoUploadMedia)
-					.onChange(async (value) => {
-						this.plugin.settings.autoUploadMedia = value;
-						await this.plugin.saveSettings();
-					}),
-			);
+			.setName('Connection test')
+			.setDesc('Verify that the URL and token are correct, then refresh data.')
+			.addButton((btn) => {
+				btn.setButtonText('Test Connection')
+					.setCta()
+					.onClick(async () => {
+						btn.setDisabled(true);
+						btn.setButtonText('Testing…');
+						await this.plugin.testConnection();
+						btn.setDisabled(false);
+						btn.setButtonText('Test Connection');
+					});
+				return btn;
+			})
+			.addButton((btn) => {
+				btn.setButtonText('Refresh Data')
+					.onClick(async () => {
+						btn.setDisabled(true);
+						await this.plugin.fetchTagsAndCategories();
+						this.display();
+						btn.setDisabled(false);
+					});
+				return btn;
+			});
 
 		containerEl.createEl('hr');
-		containerEl.createEl('p', {
-			text: 'Need help? Check the Swagger docs at your VanBlog instance: '
-				+ `${this.plugin.settings.baseUrl || '<base-url>'}/swagger`,
-			attr: { style: 'color: var(--text-muted); font-size: 0.85em;' },
-		});
+	}
+
+	// ──── Tag management ───────────────────────────────
+
+	private renderTagManagementSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h2', { text: 'Tag Management' });
+
+		const tags = this.plugin.availableTags;
+		const tagItems = tags.map((t) => ({ name: t }));
+
+		if (tagItems.length === 0) {
+			containerEl.createEl('p', {
+				text: 'No tags loaded. Use "Refresh Data" above or configure URL/token first.',
+				attr: { style: 'color: var(--text-muted);' },
+			});
+		} else {
+			const listEl = containerEl.createEl('div', {
+				attr: {
+					style:
+						'max-height: 200px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 0.25rem; margin-bottom: 0.5rem;',
+				},
+			});
+
+			for (const tag of tagItems) {
+				const rowEl = listEl.createEl('div', {
+					attr: {
+						style:
+							'display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--background-modifier-border);',
+					},
+				});
+
+				rowEl.createEl('span', { text: tag.name });
+
+				const btnGroup = rowEl.createEl('div', {
+					attr: { style: 'display: flex; gap: 0.25rem;' },
+				});
+
+				// Rename button
+				btnGroup.createEl('button', {
+					text: 'Rename',
+					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem;' },
+				}).onclick = () => {
+					this.promptRename('tag', tag.name, async (newName) => {
+						const rid = this.plugin.tagIdMap[tag.name];
+							if (!rid) return;
+							await this.plugin.updateTag(rid, newName);
+						this.display();
+					});
+				};
+
+				// Delete button
+				btnGroup.createEl('button', {
+					text: 'Delete',
+					attr: {
+						style:
+							'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);',
+					},
+				}).onclick = () => {
+					this.confirmDelete('tag', tag.name, async () => {
+						const delTagId = this.plugin.tagIdMap[tag.name]; if (delTagId) this.plugin.deleteTag(delTagId, tag.name);
+						this.display();
+					});
+				};
+			}
+		}
+
+		// Add tag button
+		new Setting(containerEl)
+			.setName('Add new tag')
+			.addButton((btn) => {
+				btn.setButtonText('+ Add Tag')
+					.setCta()
+					.onClick(() => {
+						this.promptCreate('tag', async (name) => {
+							await this.plugin.createTag(name);
+							this.display();
+						});
+					});
+				return btn;
+			});
+
+		containerEl.createEl('hr');
+	}
+
+	// ──── Category management ──────────────────────────
+
+	private renderCategoryManagementSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h2', { text: 'Category Management' });
+
+		const cats = this.plugin.availableCategories;
+		const catItems = cats.map((c) => ({ name: c }));
+
+		if (catItems.length === 0) {
+			containerEl.createEl('p', {
+				text: 'No categories loaded. Use "Refresh Data" above or configure URL/token first.',
+				attr: { style: 'color: var(--text-muted);' },
+			});
+		} else {
+			const listEl = containerEl.createEl('div', {
+				attr: {
+					style:
+						'max-height: 200px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 0.25rem; margin-bottom: 0.5rem;',
+				},
+			});
+
+			for (const cat of catItems) {
+				const rowEl = listEl.createEl('div', {
+					attr: {
+						style:
+							'display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--background-modifier-border);',
+					},
+				});
+
+				rowEl.createEl('span', { text: cat.name });
+
+				const btnGroup = rowEl.createEl('div', {
+					attr: { style: 'display: flex; gap: 0.25rem;' },
+				});
+
+				// Rename button
+				btnGroup.createEl('button', {
+					text: 'Rename',
+					attr: { style: 'font-size: 0.8rem; padding: 0 0.4rem;' },
+				}).onclick = () => {
+					this.promptRename('category', cat.name, async (newName) => {
+						const catUpdId = this.plugin.categoryIdMap[cat.name]; if (catUpdId) this.plugin.updateCategory(catUpdId, newName);
+						this.display();
+					});
+				};
+
+				// Delete button
+				btnGroup.createEl('button', {
+					text: 'Delete',
+					attr: {
+						style:
+							'font-size: 0.8rem; padding: 0 0.4rem; color: var(--text-error);',
+					},
+				}).onclick = () => {
+					this.confirmDelete('category', cat.name, async () => {
+						const catDelId = this.plugin.categoryIdMap[cat.name]; if (catDelId) this.plugin.deleteCategory(catDelId, cat.name);
+						this.display();
+					});
+				};
+			}
+		}
+
+		// Add category button
+		new Setting(containerEl)
+			.setName('Add new category')
+			.addButton((btn) => {
+				btn.setButtonText('+ Add Category')
+					.setCta()
+					.onClick(() => {
+						this.promptCreate('category', async (name) => {
+							await this.plugin.createCategory(name);
+							this.display();
+						});
+					});
+				return btn;
+			});
+
+		containerEl.createEl('hr');
+	}
+
+	// ──── Dialog helpers ───────────────────────────────
+
+	private promptCreate(
+		type: string,
+		onConfirm: (name: string) => Promise<void>,
+	): void {
+		const value = prompt(`Enter new ${type} name:`);
+		if (!value?.trim()) return;
+		onConfirm(value.trim());
+	}
+
+	private promptRename(
+		type: string,
+		oldName: string,
+		onConfirm: (newName: string) => Promise<void>,
+	): void {
+		const value = prompt(`Rename "${oldName}" to:`, oldName);
+		if (!value?.trim() || value.trim() === oldName) return;
+		onConfirm(value.trim());
+	}
+
+	private confirmDelete(
+		type: string,
+		name: string,
+		onConfirm: () => Promise<void>,
+	): void {
+		if (confirm(`Delete ${type} "${name}"? This cannot be undone.`)) {
+			onConfirm();
+		}
 	}
 }

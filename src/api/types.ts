@@ -53,6 +53,46 @@ export interface ArticleListResponse {
 	pageSize: number;
 }
 
+// ──────────────────── Tags ────────────────────
+
+/** A tag returned by the VanBlog tag API */
+export interface TagItem {
+	id: string;
+	name: string;
+	slug: string;
+	articleCount: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/** Paginated tag-list response */
+export interface TagListResponse {
+	data: TagItem[];
+	total: number;
+	page: number;
+	pageSize: number;
+}
+
+// ──────────────────── Categories ────────────────────
+
+/** A category returned by the VanBlog category API */
+export interface CategoryItem {
+	id: string;
+	name: string;
+	slug: string;
+	articleCount: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/** Paginated category-list response */
+export interface CategoryListResponse {
+	data: CategoryItem[];
+	total: number;
+	page: number;
+	pageSize: number;
+}
+
 // ──────────────────── Media / Upload ────────────────────
 
 /** Response from a file‑upload endpoint */

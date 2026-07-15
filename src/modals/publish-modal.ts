@@ -1,6 +1,7 @@
 /**
  * Publish article modal – shows a preview of what will be published and
- * lets the user adjust tags / category before confirming.
+ * lets the user adjust category (dropdown) & tags (multi‑select with
+ * suggestions from the VanBlog API) before confirming.
  */
 
 import { App, Modal, Setting } from 'obsidian';
@@ -17,13 +18,20 @@ export class PublishModal extends Modal {
 	private resolvePromise!: (value: PublishResult) => void;
 	private promise: Promise<PublishResult>;
 
+	private availableTags: string[];
+	private availableCategories: string[];
+
 	constructor(
 		app: App,
 		fileName: string,
 		initialPayload: ArticlePayload,
+		availableTags: string[],
+		availableCategories: string[],
 	) {
 		super(app);
 		this.payload = { ...initialPayload };
+		this.availableTags = availableTags;
+		this.availableCategories = availableCategories;
 
 		this.result = {
 			confirmed: false,
@@ -58,33 +66,66 @@ export class PublishModal extends Modal {
 					}),
 			);
 
-		// ── Category ──
+		// ── Category (dropdown) ──
+		const catOptions = new Set(this.availableCategories);
+		const currentCat = this.payload.category ?? '';
+		if (currentCat && !catOptions.has(currentCat)) {
+			catOptions.add(currentCat);
+		}
+
 		new Setting(contentEl)
 			.setName('Category')
-			.addText((text) =>
-				text
-					.setPlaceholder('Category')
-					.setValue(this.payload.category ?? '')
-					.onChange((value) => {
-						this.payload.category = value || undefined;
-					}),
-			);
+			.addDropdown((dropdown) => {
+				dropdown.addOption('', '— None —');
+				for (const c of [...catOptions].sort()) {
+					if (c) dropdown.addOption(c, c);
+				}
+				dropdown.setValue(currentCat);
+				dropdown.onChange((value) => {
+					this.payload.category = value || undefined;
+				});
+			});
 
-		// ── Tags ──
-		new Setting(contentEl)
+		// ── Tags (dropdown + text) ──
+		// We keep a text input showing the tags and a dropdown to add suggestions.
+		let tagInputRef: import('obsidian').TextComponent | null = null;
+		const tagSetting = new Setting(contentEl)
 			.setName('Tags')
-			.setDesc('Comma-separated')
-			.addText((text) =>
-				text
-					.setPlaceholder('tag1, tag2')
-					.setValue((this.payload.tags ?? []).join(', '))
-					.onChange((value) => {
-						this.payload.tags = value
-							.split(',')
-							.map((t) => t.trim())
-							.filter(Boolean);
-					}),
-			);
+			.setDesc('Comma‑separated. Use the dropdown to add suggested tags.');
+
+		tagSetting.addText((text) => {
+			tagInputRef = text;
+			text
+				.setPlaceholder('tag1, tag2')
+				.setValue((this.payload.tags ?? []).join(', '))
+				.onChange((value) => {
+					this.payload.tags = value
+						.split(',')
+						.map((t) => t.trim())
+						.filter(Boolean);
+				});
+		});
+
+		// Dropdown for adding a tag from the suggestion list
+		tagSetting.addDropdown((dropdown) => {
+			dropdown.addOption('', '— Add tag —');
+			for (const t of this.availableTags) {
+				if (t) dropdown.addOption(t, t);
+			}
+			dropdown.onChange((value) => {
+				if (!value) return;
+				// Append to existing tags
+				const current = new Set(
+					(this.payload.tags ?? []).map((t) => t.toLowerCase()),
+				);
+				if (!current.has(value.toLowerCase())) {
+					const updated = [...(this.payload.tags ?? []), value];
+					this.payload.tags = updated;
+					if (tagInputRef) tagInputRef.setValue(updated.join(', '));
+				}
+				dropdown.setValue(''); // Reset to placeholder
+			});
+		});
 
 		// ── Slug ──
 		new Setting(contentEl)

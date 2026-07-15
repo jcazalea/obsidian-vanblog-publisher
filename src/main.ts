@@ -5,6 +5,7 @@
  *   - Uploads embedded images / attachments, replacing local paths.
  *   - Respects front‑matter fields (title, tags, category, slug, …).
  *   - Stores a mapping for later revoke / update.
+ *   - Fetches available tags & categories on startup for dropdown UIs.
  */
 
 import {
@@ -12,7 +13,6 @@ import {
 	Plugin,
 	TAbstractFile,
 	TFile,
-	MarkdownView,
 	Menu,
 	normalizePath,
 } from 'obsidian';
@@ -39,6 +39,14 @@ export default class VanBlogPlugin extends Plugin {
 	/** Article mapping data */
 	private pluginData = emptyData();
 
+	/** Tags & categories fetched from VanBlog — used in dropdown UIs */
+	availableTags: string[] = [];
+	availableCategories: string[] = [];
+
+	/** Maps tag/category name -> id for CRUD operations */
+	tagIdMap: Record<string, string | number> = {};
+	categoryIdMap: Record<string, string | number> = {};
+
 	// ──── Lifecycle ─────────────────────────────────────────
 
 	async onload(): Promise<void> {
@@ -49,6 +57,11 @@ export default class VanBlogPlugin extends Plugin {
 			this.settings.baseUrl,
 			this.settings.apiToken,
 		);
+
+		// Auto-fetch tags & categories when credentials are available
+		if (this.settings.baseUrl && this.settings.apiToken) {
+			this.fetchTagsAndCategories();
+		}
 
 		// Commands (can be triggered from the command palette)
 		this.addCommand({
@@ -121,12 +134,20 @@ export default class VanBlogPlugin extends Plugin {
 			DEFAULT_SETTINGS,
 			saved,
 		) as VanBlogSettings;
+
+		// Restore cached tag/category arrays from persisted data
+		const storedTags = data.availableTags as string[] | undefined;
+		if (Array.isArray(storedTags)) this.availableTags = storedTags;
+		const storedCats = data.availableCategories as string[] | undefined;
+		if (Array.isArray(storedCats)) this.availableCategories = storedCats;
 	}
 
 	async saveSettings(): Promise<void> {
 		const data: Record<string, unknown> = {
 			settings: this.settings,
 			articles: this.pluginData.articles,
+			availableTags: this.availableTags,
+			availableCategories: this.availableCategories,
 		};
 		await this.saveData(data);
 		// Keep the API client in sync
@@ -150,9 +171,137 @@ export default class VanBlogPlugin extends Plugin {
 		const data: Record<string, unknown> = {
 			settings: this.settings,
 			articles: this.pluginData.articles,
+			availableTags: this.availableTags,
+			availableCategories: this.availableCategories,
 		};
 		await this.saveData(data);
 	}
+
+	// ──── Fetch tags & categories from VanBlog ────────────
+
+	/**
+	 * Fetch available tags & categories from the VanBlog API and cache
+	 * them so the UIs (settings, publish modal) can offer dropdowns.
+	 *
+	 * Called automatically on startup when credentials are configured,
+	 * and can also be invoked manually via the "Refresh" buttons in settings.
+	 */
+	async fetchTagsAndCategories(): Promise<void> {
+		if (!this.settings.baseUrl || !this.settings.apiToken) {
+			new Notice('VanBlog: configure URL and API token first');
+			return;
+		}
+
+		try {
+			const [tags, cats] = await Promise.all([
+				this.api.getTags(),
+				this.api.getCategories(),
+			]);
+
+			if (tags && tags.length > 0) {
+				this.availableTags = tags
+					.map((t) => t.name)
+					.filter(Boolean)
+					.sort();
+				tags.forEach((t) => {
+					if (t.name) this.tagIdMap[t.name] = t.id;
+				});
+			}
+			if (cats && cats.length > 0) {
+				this.availableCategories = cats
+					.map((c) => c.name)
+					.filter(Boolean)
+					.sort();
+				cats.forEach((c) => {
+					if (c.name) this.categoryIdMap[c.name] = c.id;
+				});
+			}
+
+			await this.saveSettings();
+		} catch (err) {
+			this.handleError(err, 'Failed to fetch tags & categories');
+		}
+	}
+
+
+		// ---- Connection test --------------------------------------------
+
+		async testConnection(): Promise<boolean> {
+			try {
+				const ok = await this.api.testConnection();
+				if (ok) {
+					new Notice('VanBlog connection successful!');
+				}
+				return ok;
+			} catch (err) {
+				this.handleError(err, 'Connection test failed');
+				return false;
+			}
+		}
+
+		// ---- Tag management helpers -------------------------------------
+
+		async createTag(name: string): Promise<void> {
+			try {
+				await this.api.createTag(name);
+				new Notice('Tag "' + name + '" created');
+				await this.fetchTagsAndCategories();
+			} catch (err) {
+				this.handleError(err, 'Failed to create tag');
+			}
+		}
+
+		async updateTag(id: string | number, name: string): Promise<void> {
+			try {
+				await this.api.updateTag(id, name);
+				new Notice('Tag updated to "' + name + '"');
+				await this.fetchTagsAndCategories();
+			} catch (err) {
+				this.handleError(err, 'Failed to update tag');
+			}
+		}
+
+		async deleteTag(id: string | number, name: string): Promise<void> {
+			try {
+				await this.api.deleteTag(id);
+				new Notice('Tag "' + name + '" deleted');
+				await this.fetchTagsAndCategories();
+			} catch (err) {
+				this.handleError(err, 'Failed to delete tag');
+			}
+		}
+
+		// ---- Category management helpers --------------------------------
+
+		async createCategory(name: string): Promise<void> {
+			try {
+				await this.api.createCategory(name);
+				new Notice('Category "' + name + '" created');
+				await this.fetchTagsAndCategories();
+			} catch (err) {
+				this.handleError(err, 'Failed to create category');
+			}
+		}
+
+		async updateCategory(id: string | number, name: string): Promise<void> {
+			try {
+				await this.api.updateCategory(id, name);
+				new Notice('Category updated to "' + name + '"');
+				await this.fetchTagsAndCategories();
+			} catch (err) {
+				this.handleError(err, 'Failed to update category');
+			}
+		}
+
+		async deleteCategory(id: string | number, name: string): Promise<void> {
+			try {
+				await this.api.deleteCategory(id);
+				new Notice('Category "' + name + '" deleted');
+				await this.fetchTagsAndCategories();
+			} catch (err) {
+				this.handleError(err, 'Failed to delete category');
+			}
+		}
 
 	// ──── Publish flow ─────────────────────────────────────
 
@@ -222,8 +371,14 @@ export default class VanBlogPlugin extends Plugin {
 			}
 		}
 
-		// 5. Show publish modal for confirmation / editing
-		const modal = new PublishModal(this.app, file.name, payload);
+		// 5. Show publish modal for confirmation / editing — pass available tags & categories
+		const modal = new PublishModal(
+			this.app,
+			file.name,
+			payload,
+			this.availableTags,
+			this.availableCategories,
+		);
 		modal.open();
 		const result = await modal.waitForResult();
 
@@ -325,8 +480,6 @@ export default class VanBlogPlugin extends Plugin {
 			mimeType,
 		);
 
-		// Return the URL from the upload response.
-		// It may be in `result.url` or the response might use a different key.
 		return result.url;
 	}
 
