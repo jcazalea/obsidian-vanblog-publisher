@@ -16,6 +16,7 @@ export interface VanBlogSettings {
 	defaultCategory: string;
 	defaultTags: string;
 	defaultAuthor: string;
+	defaultHide: boolean;
 	autoUploadMedia: boolean;
 	locale: Locale;
 }
@@ -26,6 +27,7 @@ export const DEFAULT_SETTINGS: VanBlogSettings = {
 	defaultCategory: '',
 	defaultTags: '',
 	defaultAuthor: '',
+	defaultHide: false,
 	autoUploadMedia: true,
 	locale: 'obsidian',
 };
@@ -94,16 +96,6 @@ export class VanBlogSettingTab extends PluginSettingTab {
 						btn.setButtonText(t('settings.testBtn'));
 					});
 				return btn;
-			})
-			.addButton((btn) => {
-				btn.setButtonText(t('settings.refreshBtn'))
-					.onClick(async () => {
-						btn.setDisabled(true);
-						await this.plugin.fetchTagsAndCategories();
-						this.display();
-						btn.setDisabled(false);
-					});
-				return btn;
 			});
 
 		containerEl.createEl('hr');
@@ -139,31 +131,49 @@ export class VanBlogSettingTab extends PluginSettingTab {
 	private renderDefaultOptionsSection(containerEl: HTMLElement): void {
 		containerEl.createEl('h2', { text: t('settings.defaultOptions') });
 
+		// Default category — dropdown from available categories
+		const catOptions = new Set(this.plugin.availableCategories);
+		const currentCat = this.plugin.settings.defaultCategory;
+		if (currentCat && !catOptions.has(currentCat)) {
+			catOptions.add(currentCat);
+		}
+
 		new Setting(containerEl)
 			.setName(t('settings.defaultCategory'))
 			.setDesc(t('settings.defaultCategoryDesc'))
-			.addText((text) =>
-				text
-					.setPlaceholder(t('settings.none'))
-					.setValue(this.plugin.settings.defaultCategory)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultCategory = value;
-						await this.plugin.saveSettings();
-					}),
-			);
+			.addDropdown((dropdown) => {
+				dropdown.addOption('', t('settings.none'));
+				for (const c of [...catOptions].sort()) {
+					if (c) dropdown.addOption(c, c);
+				}
+				dropdown.setValue(currentCat);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.defaultCategory = value;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		// Default tag — dropdown from available tags
+		const tagOptions = new Set(this.plugin.availableTags);
+		const currentTag = this.plugin.settings.defaultTags;
+		if (currentTag && !tagOptions.has(currentTag)) {
+			tagOptions.add(currentTag);
+		}
 
 		new Setting(containerEl)
 			.setName(t('settings.defaultTag'))
 			.setDesc(t('settings.defaultTagDesc'))
-			.addText((text) =>
-				text
-					.setPlaceholder(t('settings.none'))
-					.setValue(this.plugin.settings.defaultTags)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultTags = value;
-						await this.plugin.saveSettings();
-					}),
-			);
+			.addDropdown((dropdown) => {
+				dropdown.addOption('', t('settings.none'));
+				for (const tag of [...tagOptions].sort()) {
+					if (tag) dropdown.addOption(tag, tag);
+				}
+				dropdown.setValue(currentTag);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.defaultTags = value;
+					await this.plugin.saveSettings();
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(t('settings.defaultAuthor'))
@@ -174,6 +184,18 @@ export class VanBlogSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.defaultAuthor)
 					.onChange(async (value) => {
 						this.plugin.settings.defaultAuthor = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName(t('settings.defaultHide'))
+			.setDesc(t('settings.defaultHideDesc'))
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.defaultHide)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultHide = value;
 						await this.plugin.saveSettings();
 					}),
 			);
@@ -197,6 +219,19 @@ export class VanBlogSettingTab extends PluginSettingTab {
 
 	private renderTagManagementSection(containerEl: HTMLElement): void {
 		containerEl.createEl('h2', { text: t('settings.tagManagement') });
+
+		// Refresh button for tags
+		new Setting(containerEl)
+			.addButton((btn) => {
+				btn.setButtonText(t('settings.refreshBtn'))
+					.onClick(async () => {
+						btn.setDisabled(true);
+						await this.plugin.fetchTagsAndCategories();
+						this.display();
+						btn.setDisabled(false);
+					});
+				return btn;
+			});
 
 		const tags = this.plugin.availableTags;
 
@@ -260,6 +295,19 @@ export class VanBlogSettingTab extends PluginSettingTab {
 
 	private renderCategoryManagementSection(containerEl: HTMLElement): void {
 		containerEl.createEl('h2', { text: t('settings.categoryManagement') });
+
+		// Refresh button for categories
+		new Setting(containerEl)
+			.addButton((btn) => {
+				btn.setButtonText(t('settings.refreshBtn'))
+					.onClick(async () => {
+						btn.setDisabled(true);
+						await this.plugin.fetchTagsAndCategories();
+						this.display();
+						btn.setDisabled(false);
+					});
+				return btn;
+			});
 
 		const cats = this.plugin.availableCategories;
 

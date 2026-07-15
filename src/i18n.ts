@@ -133,6 +133,8 @@ const dict: Dict = {
 	'settings.defaultAuthor':         { zh: '默认作者', en: 'Default author' },
 	'settings.defaultAuthorDesc':     { zh: '文档 front-matter 中未指定作者时使用此默认值', en: 'Author used when the file has no `author` front-matter.' },
 	'settings.defaultAuthorPlaceholder': { zh: '请输入作者名称', en: 'Enter author name' },
+	'settings.defaultHide':           { zh: '默认首页隐藏', en: 'Default hide from front page' },
+	'settings.defaultHideDesc':       { zh: '发布时默认在首页隐藏文章，可在发布弹窗中单独修改', en: 'Hide articles from the front page by default. Can be overridden per article in the publish dialog.' },
 	'settings.autoUpload':            { zh: '自动上传媒体文件', en: 'Auto-upload embedded media' },
 	'settings.autoUploadDesc':        { zh: '发布时自动将文档中的图片/附件上传到 VanBlog 图床，并替换为远程地址', en: 'Upload images/attachments to VanBlog before publishing and replace local paths with remote URLs.' },
 	'settings.none':                  { zh: '— 无 —', en: '— None —' },

@@ -331,30 +331,31 @@ export default class VanBlogPlugin extends Plugin {
 			}
 		}
 
-		// 4. Gather article payload from front‑matter + settings + VanBlog API
-		//    Priority: frontmatter > settings defaults > existing server data
-		//    This ensures user edits in front-matter always take effect on re-publish.
+		// 4. Gather article payload for modal pre‑fill
+		//    Priority: existing server data > settings defaults > front‑matter
+		//    The modal lets the user review & edit; the edited result (finalPayload)
+		//    is what actually gets sent to the VanBlog API on confirm.
 		const now = new Date().toISOString();
 		const payload: ArticlePayload = {
-			title: title || existingArticle?.title || '',
-			content: body || existingArticle?.content || '',
+			title: existingArticle?.title || title || '',
+			content: existingArticle?.content || body || '',
 			tags:
-				frontmatter.tags?.length
-					? frontmatter.tags
-					: this.settings.defaultTags
-						? this.settings.defaultTags.split(',').map((t) => t.trim()).filter(Boolean)
-						: existingArticle?.tags?.length
-							? existingArticle.tags
+				existingArticle?.tags?.length
+					? existingArticle.tags
+					: frontmatter.tags?.length
+						? frontmatter.tags
+						: this.settings.defaultTags
+							? this.settings.defaultTags.split(',').map((t) => t.trim()).filter(Boolean)
 							: undefined,
-			category: frontmatter.category || this.settings.defaultCategory || existingArticle?.category || undefined,
-			top: frontmatter.top ?? existingArticle?.top,
-			hidden: frontmatter.hide ?? existingArticle?.hidden,
-			private: (frontmatter.password ? true : undefined) ?? existingArticle?.private,
-			password: frontmatter.password || existingArticle?.password || undefined,
-			pathname: frontmatter.slug || existingArticle?.pathname,
-			copyright: frontmatter.copyright || existingArticle?.copyright,
-			author: frontmatter.author || this.settings.defaultAuthor || existingArticle?.author || undefined,
-			createdAt: frontmatter.date || existingArticle?.createdAt || now,
+			category: existingArticle?.category || frontmatter.category || this.settings.defaultCategory || undefined,
+			top: existingArticle?.top ?? frontmatter.top,
+			hidden: existingArticle?.hidden ?? frontmatter.hide ?? this.settings.defaultHide,
+			private: existingArticle?.private ?? (frontmatter.password ? true : undefined),
+			password: existingArticle?.password || frontmatter.password || undefined,
+			pathname: existingArticle?.pathname || frontmatter.slug,
+			copyright: existingArticle?.copyright || frontmatter.copyright,
+			author: existingArticle?.author || frontmatter.author || this.settings.defaultAuthor || undefined,
+			createdAt: existingArticle?.createdAt || frontmatter.date || now,
 			updatedAt: now,
 		};
 
