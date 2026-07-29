@@ -3,7 +3,7 @@
 	"name": "VanBlog Publisher",
 	"version": "1.0.0",
 	"minAppVersion": "1.0.0",
-	"description": "Publish and manage documents on your VanBlog blog system directly from Obsidian.",
+	"description": "Manage and publish documents to the vanBlog blog system\n",
 	"author": "jcazalea",
 	"authorUrl": "",
 	"fundingUrl": "",
