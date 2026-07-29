@@ -57,7 +57,7 @@ export class VanBlogSettingTab extends PluginSettingTab {
 	// ──── Connection settings ───────────────────────────
 
 	private renderConnectionSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: t('settings.connection') });
+		new Setting(containerEl).setName(t('settings.connection')).setHeading();
 
 		new Setting(containerEl)
 			.setName(t('settings.baseUrl'))
@@ -92,22 +92,21 @@ export class VanBlogSettingTab extends PluginSettingTab {
 				btn.setButtonText(t('settings.testBtn'))
 					.setCta()
 					.onClick(async () => {
-						btn.setDisabled(true);
+						btn.buttonEl.disabled = true;
 						btn.setButtonText(t('settings.testingBtn'));
 						await this.plugin.testConnection();
-						btn.setDisabled(false);
+						btn.buttonEl.disabled = false;
 						btn.setButtonText(t('settings.testBtn'));
 					});
 				return btn;
 			});
 
-		containerEl.createEl('hr');
 	}
 
 	// ──── Language ─────────────────────────────────────
 
 	private renderLanguageSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: t('settings.language') });
+		new Setting(containerEl).setName(t('settings.language')).setHeading();
 
 		new Setting(containerEl)
 			.setName(t('settings.language'))
@@ -126,13 +125,12 @@ export class VanBlogSettingTab extends PluginSettingTab {
 				});
 			});
 
-		containerEl.createEl('hr');
 	}
 
 	// ──── Default publish options ──────────────────────
 
 	private renderDefaultOptionsSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: t('settings.defaultOptions') });
+		new Setting(containerEl).setName(t('settings.defaultOptions')).setHeading();
 
 		// Default category — dropdown from available categories
 		const catOptions = new Set(this.plugin.availableCategories);
@@ -227,23 +225,22 @@ export class VanBlogSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		containerEl.createEl('hr');
 	}
 
 	// ──── Tag management ───────────────────────────────
 
 	private renderTagManagementSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: t('settings.tagManagement') });
+		new Setting(containerEl).setName(t('settings.tagManagement')).setHeading();
 
 		// Refresh button for tags
 		new Setting(containerEl)
 			.addButton((btn) => {
 				btn.setButtonText(t('settings.refreshBtn'))
 					.onClick(async () => {
-						btn.setDisabled(true);
+						btn.buttonEl.disabled = true;
 						await this.plugin.fetchTagsAndCategories();
 						this.display();
-						btn.setDisabled(false);
+						btn.buttonEl.disabled = false;
 					});
 				return btn;
 			});
@@ -303,23 +300,22 @@ export class VanBlogSettingTab extends PluginSettingTab {
 
 		// (Add-tag button removed — tags are auto‑managed by VanBlog)
 
-		containerEl.createEl('hr');
 	}
 
 	// ──── Category management ──────────────────────────
 
 	private renderCategoryManagementSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: t('settings.categoryManagement') });
+		new Setting(containerEl).setName(t('settings.categoryManagement')).setHeading();
 
 		// Refresh button for categories
 		new Setting(containerEl)
 			.addButton((btn) => {
 				btn.setButtonText(t('settings.refreshBtn'))
 					.onClick(async () => {
-						btn.setDisabled(true);
+						btn.buttonEl.disabled = true;
 						await this.plugin.fetchTagsAndCategories();
 						this.display();
-						btn.setDisabled(false);
+						btn.buttonEl.disabled = false;
 					});
 				return btn;
 			});
@@ -379,13 +375,12 @@ export class VanBlogSettingTab extends PluginSettingTab {
 
 		// (Add-category button removed — categories are auto‑managed by VanBlog)
 
-		containerEl.createEl('hr');
 	}
 
 	// ──── Published documents ─────────────────────────
 
 	private renderPublishedDocsSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: t('settings.publishedDocs') });
+		new Setting(containerEl).setName(t('settings.publishedDocs')).setHeading();
 
 		// Container for the results table
 		const resultContainer = containerEl.createEl('div');
@@ -395,17 +390,16 @@ export class VanBlogSettingTab extends PluginSettingTab {
 				btn.setButtonText(t('settings.viewPublishedBtn'))
 					.setCta()
 					.onClick(async () => {
-						btn.setDisabled(true);
+						btn.buttonEl.disabled = true;
 						btn.setButtonText(t('settings.scanning'));
 						resultContainer.empty();
 						await this.renderPublishedDocsList(resultContainer);
-						btn.setDisabled(false);
+						btn.buttonEl.disabled = false;
 						btn.setButtonText(t('settings.viewPublishedBtn'));
 					});
 				return btn;
 			});
 
-		containerEl.createEl('hr');
 	}
 
 	private async renderPublishedDocsList(container: HTMLElement): Promise<void> {
