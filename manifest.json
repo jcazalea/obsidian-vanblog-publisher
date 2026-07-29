@@ -3,7 +3,7 @@
 	"name": "VanBlog Publisher",
 	"version": "1.0.0",
 	"minAppVersion": "1.0.0",
-	"description": "Manage and publish documents to the vanBlog blog system\n",
+	"description": "Manage and publish documents to the vanBlog blog system.",
 	"author": "jcazalea",
 	"authorUrl": "",
 	"fundingUrl": "",
